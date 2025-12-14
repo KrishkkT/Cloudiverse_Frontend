@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Play, 
   Server, 
@@ -29,6 +29,58 @@ const MockWorkflowWorkspace = () => {
     name: 'New Project',
     status: 'Draft'
   });
+  const [loading, setLoading] = useState(true);
+
+  // Load workspace data if editing existing workspace
+  useEffect(() => {
+    if (workspaceId) {
+      fetchWorkspaceData();
+    } else {
+      setLoading(false);
+    }
+  }, [workspaceId]);
+
+  const fetchWorkspaceData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces/${workspaceId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const workspace = await response.json();
+        setProjectData({
+          name: workspace.name,
+          status: workspace.status || 'Draft'
+        });
+        
+        // Load project data if it exists
+        if (workspace.project_data) {
+          const projectData = typeof workspace.project_data === 'string' 
+            ? JSON.parse(workspace.project_data) 
+            : workspace.project_data;
+          
+          if (projectData.appDescription) {
+            setAppDescription(projectData.appDescription);
+          }
+          
+          if (projectData.activeStep) {
+            setActiveStep(projectData.activeStep);
+          }
+          
+          if (projectData.completedSteps) {
+            setCompletedSteps(new Set(projectData.completedSteps));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching workspace:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Define the steps for the decision rail
   const steps = [
@@ -827,6 +879,19 @@ resource "aws_vpc" "main" {
         return renderStartState();
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-screen bg-background">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-text-secondary">Loading workspace...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background">

@@ -20,31 +20,34 @@ const NewWorkspace = () => {
     
     try {
       const token = localStorage.getItem('token');
+      
+      const requestData = {
+        name: projectName,
+        description: appDescription,
+        project_data: {
+          appDescription,
+          projectName
+        }
+      };
+      
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          name: projectName,
-          description: appDescription,
-          project_data: {
-            appDescription,
-            projectName
-          }
-        })
+        body: JSON.stringify(requestData)
       });
       
       if (response.ok) {
         const workspace = await response.json();
+        // Navigate to the newly created workspace
         navigate(`/workspace/${workspace.id}`);
       } else {
         const error = await response.json();
         alert(error.message || 'Failed to create workspace');
       }
     } catch (error) {
-      console.error('Error creating workspace:', error);
       alert('Failed to create workspace');
     } finally {
       setLoading(false);

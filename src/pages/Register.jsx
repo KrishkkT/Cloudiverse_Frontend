@@ -13,25 +13,53 @@ const Register = () => {
   const [company, setCompany] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({}); // Add state for form errors
   const navigate = useNavigate();
   const { register } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Clear previous errors
+    setErrors({});
+    
+    // Client-side validation
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
+      setErrors({ confirmPassword: 'Passwords do not match' });
+      return;
+    }
+    
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      setErrors({ password: 'Password must be at least 6 characters' });
       return;
     }
     
     setLoading(true);
     
     try {
-      await register(email, password, name);
-      toast.success('Account created successfully!');
-      navigate('/workspaces');
+      const result = await register(email, password, name, company);
+      if (result.success) {
+        toast.success('Account created successfully!');
+        navigate('/workspaces');
+      } else {
+        // Display specific error message from backend
+        toast.error(result.error || 'Failed to create account. Please try again.');
+        // Set form errors for display
+        if (result.error && result.error.includes('Email')) {
+          setErrors({ email: result.error });
+        } else if (result.error && result.error.includes('Password')) {
+          setErrors({ password: result.error });
+        } else if (result.error && result.error.includes('Name')) {
+          setErrors({ name: result.error });
+        } else if (result.error) {
+          setErrors({ general: result.error });
+        }
+      }
     } catch (error) {
-      toast.error('Failed to create account. Please try again.');
+      toast.error('Failed to connect to server. Please try again.');
+      setErrors({ general: 'Connection error. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -53,6 +81,12 @@ const Register = () => {
               <p className="text-text-secondary mb-10">Join Cloudiverse to start designing cloud architectures</p>
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                {errors.general && (
+                  <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-200 text-sm">
+                    {errors.general}
+                  </div>
+                )}
+                
                 <div>
                   <label htmlFor="name" className="block text-sm font-medium text-text-primary mb-2">
                     Full Name
@@ -66,11 +100,16 @@ const Register = () => {
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10"
+                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 ${
+                        errors.name ? 'border-red-500' : 'border-border'
+                      }`}
                       placeholder="John Doe"
                       required
                     />
                   </div>
+                  {errors.name && (
+                    <p className="mt-1 text-sm text-red-400">{errors.name}</p>
+                  )}
                 </div>
 
                 <div>
@@ -86,11 +125,16 @@ const Register = () => {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10"
+                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 ${
+                        errors.email ? 'border-red-500' : 'border-border'
+                      }`}
                       placeholder="you@company.com"
                       required
                     />
                   </div>
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-red-400">{errors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -125,7 +169,9 @@ const Register = () => {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10"
+                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10 ${
+                        errors.password ? 'border-red-500' : 'border-border'
+                      }`}
                       placeholder="••••••••"
                       required
                     />
@@ -141,6 +187,9 @@ const Register = () => {
                       )}
                     </button>
                   </div>
+                  {errors.password && (
+                    <p className="mt-1 text-sm text-red-400">{errors.password}</p>
+                  )}
                 </div>
 
                 <div>
@@ -156,11 +205,16 @@ const Register = () => {
                       type={showPassword ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10"
+                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10 ${
+                        errors.confirmPassword ? 'border-red-500' : 'border-border'
+                      }`}
                       placeholder="••••••••"
                       required
                     />
                   </div>
+                  {errors.confirmPassword && (
+                    <p className="mt-1 text-sm text-red-400">{errors.confirmPassword}</p>
+                  )}
                 </div>
 
                 <button

@@ -114,8 +114,8 @@ const LandingPage = () => {
               <div className="ml-10 flex items-center space-x-8">
                 <a href="#features" className="text-text-secondary hover:text-text-primary transition-colors">Features</a>
                 <a href="#pricing" className="text-text-secondary hover:text-text-primary transition-colors">Pricing</a>
-                <a href="#docs" className="text-text-secondary hover:text-text-primary transition-colors">Docs</a>
-                <a href="#blog" className="text-text-secondary hover:text-text-primary transition-colors">Blog</a>
+                <a href="/docs" className="text-text-secondary hover:text-text-primary transition-colors">Docs</a>
+                <a href="/blog" className="text-text-secondary hover:text-text-primary transition-colors">Blog</a>
               </div>
             </nav>
             <div className="flex items-center space-x-4">
@@ -369,7 +369,7 @@ const LandingPage = () => {
               <ul className="space-y-2">
                 <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Features</a></li>
                 <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Pricing</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Documentation</a></li>
+                <li><a href="/docs" className="text-text-secondary hover:text-text-primary transition-colors">Documentation</a></li>
                 <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Releases</a></li>
               </ul>
             </div>
@@ -377,7 +377,7 @@ const LandingPage = () => {
               <h4 className="text-lg font-semibold mb-4">Company</h4>
               <ul className="space-y-2">
                 <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">About</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Blog</a></li>
+                <li><a href="/blog" className="text-text-secondary hover:text-text-primary transition-colors">Blog</a></li>
                 <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Careers</a></li>
                 <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Contact</a></li>
               </ul>

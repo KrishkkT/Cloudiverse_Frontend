@@ -8,6 +8,7 @@ const WorkspaceSelector = () => {
   const navigate = useNavigate();
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   useEffect(() => {
     fetchWorkspaces();
@@ -15,6 +16,7 @@ const WorkspaceSelector = () => {
   
   const fetchWorkspaces = async () => {
     try {
+      setError(null);
       const token = localStorage.getItem('token');
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces`, {
         headers: {
@@ -25,9 +27,12 @@ const WorkspaceSelector = () => {
       if (response.ok) {
         const data = await response.json();
         setWorkspaces(data);
+      } else {
+        setError('Failed to load workspaces. Please try again.');
       }
     } catch (error) {
       console.error('Error fetching workspaces:', error);
+      setError('Failed to connect to server. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -40,6 +45,30 @@ const WorkspaceSelector = () => {
   const handleSelectWorkspace = (workspaceId) => {
     navigate(`/workspace/${workspaceId}`);
   };
+  
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+  
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
+            <h2 className="text-xl font-semibold text-red-500 mb-2">Error Loading Workspaces</h2>
+            <p className="text-text-secondary mb-4">{error}</p>
+            <button
+              onClick={fetchWorkspaces}
+              className="btn btn-primary"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-background p-6">
@@ -61,7 +90,7 @@ const WorkspaceSelector = () => {
               <span>Profile</span>
             </button>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="btn btn-secondary flex items-center space-x-2 px-4 py-2.5"
             >
               <LogOut size={16} />

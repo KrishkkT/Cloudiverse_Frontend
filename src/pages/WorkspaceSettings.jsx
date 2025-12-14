@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Trash2, Save, ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -6,22 +6,107 @@ import { toast } from 'react-toastify';
 const WorkspaceSettings = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [workspaceName, setWorkspaceName] = useState('E-commerce Platform');
-  const [workspaceDescription, setWorkspaceDescription] = useState('High availability e-commerce system');
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceDescription, setWorkspaceDescription] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const handleDeleteWorkspace = () => {
+  // Fetch workspace details
+  useEffect(() => {
+    const fetchWorkspace = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const workspace = await response.json();
+          setWorkspaceName(workspace.name);
+          setWorkspaceDescription(workspace.description);
+        } else {
+          toast.error('Failed to load workspace');
+          navigate('/workspaces');
+        }
+      } catch (error) {
+        console.error('Error fetching workspace:', error);
+        toast.error('Failed to load workspace');
+        navigate('/workspaces');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (id) {
+      fetchWorkspace();
+    }
+  }, [id, navigate]);
+
+  const handleDeleteWorkspace = async () => {
     if (window.confirm('Are you sure you want to delete this workspace? This action cannot be undone.')) {
-      // In a real app, you would call your backend API to delete the workspace
-      toast.success('Workspace deleted successfully');
-      navigate('/workspaces');
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          toast.success('Workspace deleted successfully');
+          navigate('/workspaces');
+        } else {
+          const error = await response.json();
+          toast.error(error.message || 'Failed to delete workspace');
+        }
+      } catch (error) {
+        console.error('Error deleting workspace:', error);
+        toast.error('Failed to delete workspace');
+      }
     }
   };
 
-  const handleSaveSettings = (e) => {
+  const handleSaveSettings = async (e) => {
     e.preventDefault();
-    // In a real app, you would call your backend API to save the settings
-    toast.success('Workspace settings saved');
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: workspaceName,
+          description: workspaceDescription
+        })
+      });
+      
+      if (response.ok) {
+        const updatedWorkspace = await response.json();
+        toast.success('Workspace settings saved');
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Failed to save settings');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-text-secondary">Loading workspace settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

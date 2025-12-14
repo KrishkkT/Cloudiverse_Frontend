@@ -40,7 +40,7 @@ const AuthProvider = ({ children }) => {
         localStorage.removeItem('token');
       }
     } catch (error) {
-      console.error('Token validation error:', error);
+      // Even if there's a network error, we still want to remove the token
       localStorage.removeItem('token');
     } finally {
       setLoading(false);
@@ -62,26 +62,23 @@ const AuthProvider = ({ children }) => {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         setUser(data.user);
-        toast.success('Logged in successfully!');
         return { success: true };
       } else {
-        toast.error(data.message || 'Failed to log in');
         return { success: false, error: data.message };
       }
     } catch (error) {
-      toast.error('Failed to connect to server');
       return { success: false, error: 'Connection error' };
     }
   };
 
-  const register = async (email, password, name) => {
+  const register = async (email, password, name, company = '') => {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name, email, password, company })
       });
       
       const data = await response.json();
@@ -89,22 +86,36 @@ const AuthProvider = ({ children }) => {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         setUser(data.user);
-        toast.success('Account created successfully!');
         return { success: true };
       } else {
-        toast.error(data.message || 'Failed to create account');
         return { success: false, error: data.message };
       }
     } catch (error) {
-      toast.error('Failed to connect to server');
       return { success: false, error: 'Connection error' };
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-    toast.success('Logged out successfully!');
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Call backend to invalidate token (optional)
+        await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }).catch(err => {
+          // Ignore errors during logout
+        });
+      }
+    } catch (error) {
+    } finally {
+      // Always remove token and clear user data
+      localStorage.removeItem('token');
+      setUser(null);
+    }
   };
 
   const updateProfile = async (profileData) => {
@@ -123,14 +134,11 @@ const AuthProvider = ({ children }) => {
       
       if (response.ok) {
         setUser(data);
-        toast.success('Profile updated successfully!');
         return { success: true };
       } else {
-        toast.error(data.message || 'Failed to update profile');
         return { success: false, error: data.message };
       }
     } catch (error) {
-      toast.error('Failed to connect to server');
       return { success: false, error: 'Connection error' };
     }
   };

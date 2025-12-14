@@ -79,7 +79,7 @@ const Blog = () => {
               <div className="flex-shrink-0 flex items-center">
                 <div className="flex items-center">
                   <img
-                    src="/assets/images/cloudiverse.png"
+                    src="./assets/images/cloudiverse.png"
                     alt="Cloudiverse"
                     className="h-8 w-auto"
                   />

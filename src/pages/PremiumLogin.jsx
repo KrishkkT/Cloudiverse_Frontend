@@ -10,19 +10,35 @@ const PremiumLogin = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({}); // Add state for form errors
   const navigate = useNavigate();
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setErrors({}); // Clear previous errors
     
     try {
-      await login(email, password);
-      toast.success('Logged in successfully!');
-      navigate('/workspaces');
+      const result = await login(email, password);
+      if (result.success) {
+        toast.success('Logged in successfully!');
+        navigate('/workspaces');
+      } else {
+        // Display specific error message from backend
+        toast.error(result.error || 'Failed to log in. Please check your credentials.');
+        // Set form errors for display
+        if (result.error && result.error.includes('Email')) {
+          setErrors({ email: result.error });
+        } else if (result.error && result.error.includes('Password')) {
+          setErrors({ password: result.error });
+        } else if (result.error) {
+          setErrors({ general: result.error });
+        }
+      }
     } catch (error) {
-      toast.error('Failed to log in. Please check your credentials.');
+      toast.error('Failed to connect to server. Please try again.');
+      setErrors({ general: 'Connection error. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -44,6 +60,12 @@ const PremiumLogin = () => {
               <p className="text-text-secondary mb-10">Sign in to your Cloudiverse account</p>
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                {errors.general && (
+                  <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-200 text-sm">
+                    {errors.general}
+                  </div>
+                )}
+                
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-text-primary mb-2">
                     Email Address
@@ -57,11 +79,16 @@ const PremiumLogin = () => {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10"
+                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 ${
+                        errors.email ? 'border-red-500' : 'border-border'
+                      }`}
                       placeholder="you@company.com"
                       required
                     />
                   </div>
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-red-400">{errors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -82,7 +109,9 @@ const PremiumLogin = () => {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10"
+                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10 ${
+                        errors.password ? 'border-red-500' : 'border-border'
+                      }`}
                       placeholder="••••••••"
                       required
                     />
@@ -98,6 +127,9 @@ const PremiumLogin = () => {
                       )}
                     </button>
                   </div>
+                  {errors.password && (
+                    <p className="mt-1 text-sm text-red-400">{errors.password}</p>
+                  )}
                 </div>
 
                 <div className="flex items-center">
