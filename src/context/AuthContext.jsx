@@ -101,6 +101,12 @@ const AuthProvider = ({ children }) => {
     }
   };
 
+  const logout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+    toast.success('Logged out successfully!');
+  };
+
   const updateProfile = async (profileData) => {
     try {
       const token = localStorage.getItem('token');
