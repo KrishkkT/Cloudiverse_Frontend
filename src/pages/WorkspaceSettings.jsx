@@ -1,0 +1,122 @@
+import React, { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Trash2, Save, ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
+import { toast } from 'react-toastify';
+
+const WorkspaceSettings = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [workspaceName, setWorkspaceName] = useState('E-commerce Platform');
+  const [workspaceDescription, setWorkspaceDescription] = useState('High availability e-commerce system');
+
+  const handleDeleteWorkspace = () => {
+    if (window.confirm('Are you sure you want to delete this workspace? This action cannot be undone.')) {
+      // In a real app, you would call your backend API to delete the workspace
+      toast.success('Workspace deleted successfully');
+      navigate('/workspaces');
+    }
+  };
+
+  const handleSaveSettings = (e) => {
+    e.preventDefault();
+    // In a real app, you would call your backend API to save the settings
+    toast.success('Workspace settings saved');
+  };
+
+  return (
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <button 
+              onClick={() => navigate(-1)}
+              className="mr-4 p-2 rounded-lg hover:bg-surface"
+            >
+              <ArrowLeft className="h-5 w-5 text-text-primary" />
+            </button>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-text-primary">Workspace Settings</h1>
+              <p className="text-text-secondary">Manage your workspace configuration</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-surface border border-border rounded-xl p-6">
+          <div className="flex items-center mb-6">
+            <SettingsIcon className="h-6 w-6 text-primary mr-2" />
+            <h2 className="text-xl font-semibold text-text-primary">General Settings</h2>
+          </div>
+
+          <form onSubmit={handleSaveSettings}>
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="workspaceName" className="block text-sm font-medium text-text-primary mb-2">
+                  Workspace Name
+                </label>
+                <input
+                  id="workspaceName"
+                  type="text"
+                  value={workspaceName}
+                  onChange={(e) => setWorkspaceName(e.target.value)}
+                  className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary"
+                  placeholder="Enter workspace name"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="workspaceDescription" className="block text-sm font-medium text-text-primary mb-2">
+                  Description
+                </label>
+                <textarea
+                  id="workspaceDescription"
+                  value={workspaceDescription}
+                  onChange={(e) => setWorkspaceDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary"
+                  placeholder="Describe your workspace"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg flex items-center"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="bg-surface border border-border rounded-xl p-6 mt-6">
+          <div className="flex items-center mb-6">
+            <Trash2 className="h-6 w-6 text-red-500 mr-2" />
+            <h2 className="text-xl font-semibold text-text-primary">Danger Zone</h2>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-red-500/10 rounded-lg border border-red-500/20">
+            <div>
+              <h3 className="font-medium text-text-primary">Delete Workspace</h3>
+              <p className="text-text-secondary text-sm mt-1">
+                Permanently delete this workspace and all its data. This action cannot be undone.
+              </p>
+            </div>
+            <button
+              onClick={handleDeleteWorkspace}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Workspace
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default WorkspaceSettings;
