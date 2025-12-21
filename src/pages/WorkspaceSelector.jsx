@@ -9,11 +9,11 @@ const WorkspaceSelector = () => {
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   useEffect(() => {
     fetchWorkspaces();
   }, []);
-  
+
   const fetchWorkspaces = async () => {
     try {
       setError(null);
@@ -23,7 +23,7 @@ const WorkspaceSelector = () => {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setWorkspaces(data);
@@ -37,20 +37,20 @@ const WorkspaceSelector = () => {
       setLoading(false);
     }
   };
-  
+
   const handleCreateNewWorkspace = () => {
     navigate('/workspace/new');
   };
-  
+
   const handleSelectWorkspace = (workspaceId) => {
     navigate(`/workspace/${workspaceId}`);
   };
-  
+
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
-  
+
   if (error) {
     return (
       <div className="min-h-screen bg-background p-6">
@@ -69,7 +69,7 @@ const WorkspaceSelector = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto">
@@ -119,14 +119,14 @@ const WorkspaceSelector = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {workspaces.map((workspace) => (
-              <div 
+              <div
                 key={workspace.id}
                 onClick={() => handleSelectWorkspace(workspace.id)}
                 className="bg-surface border border-border rounded-xl p-6 hover:border-primary/30 transition-all cursor-pointer hover:scale-[1.02] relative"
               >
                 <div className="flex items-start justify-between mb-4">
                   <h3 className="text-lg font-semibold text-text-primary">{workspace.name}</h3>
-                  <button 
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(`/workspace/${workspace.id}/settings`);
@@ -137,7 +137,7 @@ const WorkspaceSelector = () => {
                     <Settings className="text-text-subtle hover:text-text-primary" size={16} />
                   </button>
                 </div>
-                
+
                 <p className="text-text-secondary text-sm mb-2">{workspace.description || 'No description provided'}</p>
                 <div className="space-y-3 mt-4">
                   <div className="flex items-center text-sm">
@@ -147,12 +147,25 @@ const WorkspaceSelector = () => {
                       {new Date(workspace.created_at).toLocaleDateString()}
                     </span>
                   </div>
+
+                  {workspace.save_count > 0 && (
+                    <div className="flex items-center text-sm">
+                      <Clock className="text-primary/70 mr-2" size={16} />
+                      <span className="text-text-secondary">Draft Saved:</span>
+                      <span className="text-text-primary ml-1">
+                        {new Date(workspace.updated_at).toLocaleDateString()} {new Date(workspace.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="text-text-subtle ml-2 text-xs px-2 py-0.5 bg-surface/50 rounded-full border border-border">
+                        {workspace.save_count} saves
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
-            
+
             {/* Empty state for new workspace */}
-            <div 
+            <div
               onClick={handleCreateNewWorkspace}
               className="bg-surface border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center hover:border-primary/50 transition-all cursor-pointer group"
             >

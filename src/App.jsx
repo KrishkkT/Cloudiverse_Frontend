@@ -7,6 +7,7 @@ import PremiumSignup from './pages/PremiumSignup';
 import Register from './pages/Register';
 import WorkspaceSelector from './pages/WorkspaceSelector';
 import MockWorkflowWorkspace from './pages/MockWorkflowWorkspace';
+import WorkspaceCanvas from './pages/WorkspaceCanvas';
 import CloudComparison from './pages/CloudComparison';
 import TerraformViewer from './pages/TerraformViewer';
 import CostEstimation from './pages/CostEstimation';
@@ -32,12 +33,12 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/blog" element={<Blog />} />
-          
+
           {/* Authentication routes without sidebar */}
           <Route path="/login" element={<AuthLayout><PremiumLogin /></AuthLayout>} />
           <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
           <Route path="/signup" element={<AuthLayout><PremiumSignup /></AuthLayout>} />
-          
+
           {/* Application routes with sidebar */}
           <Route path="/workspaces" element={
             <div className="min-h-screen bg-background">
@@ -45,7 +46,7 @@ function App() {
             </div>
           } />
           <Route path="/workspace/new" element={<NewWorkspace />} />
-          <Route path="/workspace/:id" element={<MockWorkflowWorkspace />} />
+          <Route path="/workspace/:id" element={<WorkspaceCanvas />} />
           <Route path="/workspace/:id/settings" element={<WorkspaceSettings />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/comparison/:projectId" element={
