@@ -1,51 +1,58 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Cloud, ArrowLeft, Mail, MapPin, Phone, Send } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { ArrowLeft, Mail, MapPin, Phone, Send, CheckCircle } from 'lucide-react';
+import { useForm, ValidationError } from '@formspree/react';
 
 const Contact = () => {
     const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        subject: '',
-        message: ''
-    });
-    const [loading, setLoading] = useState(false);
+    const [state, handleSubmit] = useForm("mojabwnj");
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
+    // Success state
+    if (state.succeeded) {
+        return (
+            <div className="min-h-screen bg-background text-text-primary">
+                {/* Header */}
+                <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
+                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex items-center justify-between h-16">
+                            <button onClick={() => navigate('/')} className="flex items-center text-text-secondary hover:text-text-primary">
+                                <ArrowLeft className="h-5 w-5 mr-2" />
+                                Back
+                            </button>
+                            <div className="flex items-center">
+                                <a href={'/'}><img
+                                    src="/assets/images/cloudiverse.png"
+                                    alt="Cloudiverse Architect"
+                                    className="h-12 w-auto"
+                                /></a>
+                            </div>
+                        </div>
+                    </div>
+                </header>
 
-        try {
-            // Submit to Formspree
-            const response = await fetch('https://formspree.io/f/mojabwnj', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            });
-
-            if (response.ok) {
-                toast.success('Message sent! We\'ll get back to you soon.');
-                setFormData({ name: '', email: '', subject: '', message: '' });
-            } else {
-                const data = await response.json();
-                toast.error(data.error || 'Failed to send message. Please try again.');
-            }
-        } catch (error) {
-            console.error('Form submission error:', error);
-            toast.error('Failed to send message. Please try again.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+                {/* Success Message */}
+                <section className="py-20">
+                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="max-w-lg mx-auto text-center">
+                            <div className="bg-surface border border-border rounded-xl p-8">
+                                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                                <h2 className="text-2xl font-bold mb-4">Thank you!</h2>
+                                <p className="text-text-secondary mb-6">
+                                    Your message has been sent successfully. We'll get back to you as soon as possible.
+                                </p>
+                                <button
+                                    onClick={() => navigate('/')}
+                                    className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg"
+                                >
+                                    Back to Home
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-background text-text-primary">
@@ -58,8 +65,11 @@ const Contact = () => {
                             Back
                         </button>
                         <div className="flex items-center">
-                            <Cloud className="h-8 w-8 text-primary mr-2" />
-                            <span className="text-xl font-bold">Cloudiverse</span>
+                            <a href={'/'}><img
+                                src="/assets/images/cloudiverse.png"
+                                alt="Cloudiverse Architect"
+                                className="h-12 w-auto"
+                            /></a>
                         </div>
                     </div>
                 </div>
@@ -106,60 +116,80 @@ const Contact = () => {
                                 </div>
                             </div>
 
-                            {/* Contact Form */}
+                            {/* Contact Form - Using Formspree */}
                             <div className="bg-surface border border-border rounded-xl p-6">
                                 <h2 className="text-xl font-semibold mb-6">Send us a message</h2>
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium mb-2">Name</label>
+                                        <label htmlFor="name" className="block text-sm font-medium mb-2">Name</label>
                                         <input
+                                            id="name"
                                             type="text"
                                             name="name"
-                                            value={formData.name}
-                                            onChange={handleChange}
-                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary"
                                             required
+                                        />
+                                        <ValidationError
+                                            prefix="Name"
+                                            field="name"
+                                            errors={state.errors}
+                                            className="text-red-500 text-sm mt-1"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-2">Email</label>
+                                        <label htmlFor="email" className="block text-sm font-medium mb-2">Email</label>
                                         <input
+                                            id="email"
                                             type="email"
                                             name="email"
-                                            value={formData.email}
-                                            onChange={handleChange}
-                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary"
                                             required
+                                        />
+                                        <ValidationError
+                                            prefix="Email"
+                                            field="email"
+                                            errors={state.errors}
+                                            className="text-red-500 text-sm mt-1"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-2">Subject</label>
+                                        <label htmlFor="subject" className="block text-sm font-medium mb-2">Subject</label>
                                         <input
+                                            id="subject"
                                             type="text"
                                             name="subject"
-                                            value={formData.subject}
-                                            onChange={handleChange}
-                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary"
                                             required
+                                        />
+                                        <ValidationError
+                                            prefix="Subject"
+                                            field="subject"
+                                            errors={state.errors}
+                                            className="text-red-500 text-sm mt-1"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-2">Message</label>
+                                        <label htmlFor="message" className="block text-sm font-medium mb-2">Message</label>
                                         <textarea
+                                            id="message"
                                             name="message"
-                                            value={formData.message}
-                                            onChange={handleChange}
                                             rows={4}
-                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                                            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary"
                                             required
+                                        />
+                                        <ValidationError
+                                            prefix="Message"
+                                            field="message"
+                                            errors={state.errors}
+                                            className="text-red-500 text-sm mt-1"
                                         />
                                     </div>
                                     <button
                                         type="submit"
-                                        disabled={loading}
-                                        className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-lg flex items-center justify-center"
+                                        disabled={state.submitting}
+                                        className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-lg flex items-center justify-center disabled:opacity-50"
                                     >
-                                        {loading ? 'Sending...' : (
+                                        {state.submitting ? 'Sending...' : (
                                             <>
                                                 <Send className="h-4 w-4 mr-2" />
                                                 Send Message
