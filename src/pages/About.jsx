@@ -19,7 +19,7 @@ const About = () => {
                         </div>
                         <div className="flex items-center">
                             <a href={'/'}><img
-                                src="./assets/images/cloudiverse.png"
+                                src="/cloudiverse.png"
                                 alt="Cloudiverse Architect"
                                 className="h-12 w-auto"
                             /></a>
