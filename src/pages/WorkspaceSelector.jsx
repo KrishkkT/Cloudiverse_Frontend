@@ -27,6 +27,9 @@ const WorkspaceSelector = () => {
       if (response.ok) {
         const data = await response.json();
         setWorkspaces(data);
+      } else if (response.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
       } else {
         setError('Failed to load workspaces. Please try again.');
       }

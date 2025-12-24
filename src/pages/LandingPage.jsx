@@ -1,11 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Cloud, 
-  Zap, 
-  DollarSign, 
-  Shield, 
-  Cpu, 
+import {
+  Cloud,
+  Zap,
+  DollarSign,
+  Shield,
+  Cpu,
   Network,
   ChevronRight,
   Star,
@@ -50,37 +50,21 @@ const LandingPage = () => {
 
   const pricingPlans = [
     {
-      name: "Free Tier",
+      name: "Free for limited time",
       price: "$0",
       period: "/month",
-      description: "Perfect for individuals and small projects",
-      features: [
-        "Up to 5 projects",
-        "Multi-cloud variants",
-        "Static cost estimation",
-        "Design only (no cloud credentials needed)",
-        "Terraform generation",
-        "Community support"
-      ],
-      cta: "Get Started",
-      popular: false
-    },
-    {
-      name: "Pro Tier",
-      price: "Coming",
-      period: " Soon",
-      description: "For teams and enterprises",
+      description: "All features available during beta",
       features: [
         "Unlimited projects",
-        "Version control",
-        "Team collaboration",
-        "Advanced FinOps",
-        "Priority support",
-        "GitHub deploy",
-        "Custom integrations"
+        "All cloud providers (AWS, GCP, Azure)",
+        "Full cost estimation",
+        "Terraform code generation",
+        "Architecture diagrams",
+        "Community support"
       ],
-      cta: "Join Waitlist",
-      popular: true
+      cta: "Get Started Free",
+      popular: true,
+      highlight: "🎉 Currently Free - Pricing Coming Soon"
     }
   ];
 
@@ -103,9 +87,9 @@ const LandingPage = () => {
               <div className="flex-shrink-0 flex items-center">
                 <div className="flex items-center">
                   <a href={'/'}><img
-                      src="./assets/images/cloudiverse.png"
-                      alt="Cloudiverse Architect"
-                      className="h-12 w-auto"
+                    src="./assets/images/cloudiverse.png"
+                    alt="Cloudiverse Architect"
+                    className="h-12 w-auto"
                   /></a>
                 </div>
               </div>
@@ -115,17 +99,17 @@ const LandingPage = () => {
                 <a href="#features" className="text-text-secondary hover:text-text-primary transition-colors">Features</a>
                 <a href="#pricing" className="text-text-secondary hover:text-text-primary transition-colors">Pricing</a>
                 <a href="/docs" className="text-text-secondary hover:text-text-primary transition-colors">Docs</a>
-                <a href="/blog" className="text-text-secondary hover:text-text-primary transition-colors">Blog</a>
+                <a href="/about" className="text-text-secondary hover:text-text-primary transition-colors">About</a>
               </div>
             </nav>
             <div className="flex items-center space-x-4">
-              <button 
+              <button
                 onClick={() => navigate('/login')}
                 className="text-text-secondary hover:text-text-primary transition-colors"
               >
                 Login
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/register')}
                 className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-colors"
               >
@@ -151,7 +135,7 @@ const LandingPage = () => {
               Turn your app ideas into production-ready cloud infrastructure across AWS, Azure, and GCP with AI-powered automation
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <button 
+              <button
                 onClick={() => navigate('/register')}
                 className="bg-primary hover:bg-primary/90 text-white px-8 py-4 rounded-lg text-lg font-medium transition-colors flex items-center justify-center"
               >
@@ -260,11 +244,11 @@ const LandingPage = () => {
           </div>
           <div className="bg-code-block rounded-2xl p-8 border border-border">
             <div className="aspect-video bg-background rounded-lg flex items-center justify-center border border-border">
-              <div className="text-center">
-                <Network className="h-16 w-16 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Interactive Architecture Diagram</h3>
-                <p className="text-text-secondary">High-fidelity cloud diagram UI mockup</p>
-              </div>
+              <img
+                src="/cloud-diagram.jpg"
+                alt="Architecture preview diagram"
+                className="w-full h-full object-contain"
+              />
             </div>
           </div>
         </div>
@@ -276,26 +260,24 @@ const LandingPage = () => {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
             <p className="text-text-secondary max-w-2xl mx-auto">
-              Start for free and upgrade as you grow
+              Currently free during beta. Pricing plans coming soon.
             </p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="max-w-lg mx-auto">
             {pricingPlans.map((plan, index) => (
-              <div 
-                key={index} 
-                className={`bg-surface border border-border rounded-2xl p-8 relative ${
-                  plan.popular ? 'ring-2 ring-primary' : ''
-                }`}
+              <div
+                key={index}
+                className="bg-surface border border-border rounded-2xl p-8 relative ring-2 ring-primary"
               >
-                {plan.popular && (
-                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-primary text-white text-sm font-medium px-4 py-1 rounded-full">
-                    Most Popular
+                {plan.highlight && (
+                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-primary to-secondary text-white text-sm font-medium px-4 py-1 rounded-full">
+                    {plan.highlight}
                   </div>
                 )}
-                <div className="mb-6">
+                <div className="mb-6 text-center">
                   <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                  <div className="flex items-baseline mb-2">
-                    <span className="text-4xl font-bold">{plan.price}</span>
+                  <div className="flex items-baseline justify-center mb-2">
+                    <span className="text-5xl font-bold">{plan.price}</span>
                     <span className="text-text-secondary ml-1">{plan.period}</span>
                   </div>
                   <p className="text-text-secondary">{plan.description}</p>
@@ -308,12 +290,9 @@ const LandingPage = () => {
                     </li>
                   ))}
                 </ul>
-                <button 
-                  className={`w-full py-3 rounded-lg font-medium transition-colors ${
-                    plan.popular 
-                      ? 'bg-primary hover:bg-primary/90 text-white' 
-                      : 'bg-surface hover:bg-surface/80 border border-border text-text-primary'
-                  }`}
+                <button
+                  onClick={() => navigate('/register')}
+                  className="w-full py-3 rounded-lg font-medium bg-primary hover:bg-primary/90 text-white transition-colors"
                 >
                   {plan.cta}
                 </button>
@@ -334,7 +313,7 @@ const LandingPage = () => {
               Join thousands of developers designing better cloud architectures with AI
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <button 
+              <button
                 onClick={() => navigate('/register')}
                 className="bg-white hover:bg-gray-100 text-background px-8 py-4 rounded-lg text-lg font-medium transition-colors flex items-center justify-center"
               >
@@ -354,11 +333,12 @@ const LandingPage = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
             <div className="lg:col-span-2">
-              <div className="flex items-center mb-4">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
-                  <Cloud className="h-5 w-5 text-white" />
-                </div>
-                <span className="ml-2 text-xl font-bold">Cloudiverse Architect</span>
+              <div className="flex items-center">
+                <a href={'/'}><img
+                  src="./assets/images/cloudiverse.png"
+                  alt="Cloudiverse Architect"
+                  className="h-12 w-auto"
+                /></a>
               </div>
               <p className="text-text-secondary mb-4 max-w-md">
                 Design, compare, and generate multi-cloud architecture from plain language.
@@ -367,28 +347,25 @@ const LandingPage = () => {
             <div>
               <h4 className="text-lg font-semibold mb-4">Product</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Features</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Pricing</a></li>
+                <li><a href="#features" className="text-text-secondary hover:text-text-primary transition-colors">Features</a></li>
+                <li><a href="#pricing" className="text-text-secondary hover:text-text-primary transition-colors">Pricing</a></li>
                 <li><a href="/docs" className="text-text-secondary hover:text-text-primary transition-colors">Documentation</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Releases</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-lg font-semibold mb-4">Company</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">About</a></li>
-                <li><a href="/blog" className="text-text-secondary hover:text-text-primary transition-colors">Blog</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Careers</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Contact</a></li>
+                <li><a href="/about" className="text-text-secondary hover:text-text-primary transition-colors">About Us</a></li>
+                <li><a href="/contact" className="text-text-secondary hover:text-text-primary transition-colors">Contact</a></li>
               </ul>
             </div>
             <div>
               <h4 className="text-lg font-semibold mb-4">Legal</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Terms</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Privacy</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Security</a></li>
-                <li><a href="#" className="text-text-secondary hover:text-text-primary transition-colors">Compliance</a></li>
+                <li><a href="/terms" className="text-text-secondary hover:text-text-primary transition-colors">Terms of Service</a></li>
+                <li><a href="/privacy" className="text-text-secondary hover:text-text-primary transition-colors">Privacy Policy</a></li>
+                <li><a href="/security" className="text-text-secondary hover:text-text-primary transition-colors">Security</a></li>
+                <li><a href="/compliance" className="text-text-secondary hover:text-text-primary transition-colors">Compliance</a></li>
               </ul>
             </div>
           </div>

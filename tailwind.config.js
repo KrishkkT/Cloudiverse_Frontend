@@ -8,29 +8,24 @@ export default {
     extend: {
       colors: {
         // Global Style Palette
-        'background': '#0E1117',  // Background
-        'surface': '#161B22',     // Canvas
-        'elevated': '#1F2937',    // Cards / Panels
-        'border': '#2A3441',      // Borders
+        'background-light': '#f6f6f8',
+        'background-dark': '#101622',
+        'card-dark': '#171E2B',
+        'input-dark': '#0F131A',
+        'border-dark': '#2E3645',
+        'primary': '#2b6cee',
 
-        // Accent Colors
-        'primary': '#4F7CFF',     // Primary blue
-        'secondary': '#22C55E',   // Secondary accent (success)
-        'warning': '#F59E0B',     // Warning/variant B
-
-        // Text Colors
-        'text-primary': '#E5E7EB', // Primary text
-        'text-secondary': '#9CA3AF', // Secondary text
-        'text-subtle': '#6B7280',   // Subtle text
-
-        // New Layout Colors
+        // Mappings for existing app usage (aliasing to new palette where appropriate)
+        'background': '#101622',
+        'surface': '#171E2B',
+        'elevated': '#1F2937',
+        'border': '#2E3645',
+        'secondary': '#22C55E',
+        'warning': '#F59E0B',
+        'text-primary': '#E5E7EB',
+        'text-secondary': '#9CA3AF',
+        'text-subtle': '#6B7280',
         "primary-hover": "#2563EB",
-        "background-light": "#F3F4F6",
-        "background-dark": "#0F1116",
-        "surface-dark": "#161B22",
-        "surface-darker": "#0D1117",
-        "border-dark": "#30363D",
-        "accent-green": "#10B981",
       },
     },
   },

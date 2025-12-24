@@ -1,192 +1,116 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { toast } from 'react-toastify';
-import Logo from '../components/Logo';
+import { useAuth } from '../context/AuthContext';
+import AuthHeader from '../components/AuthHeader';
 
 const PremiumLogin = () => {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({}); // Add state for form errors
+  const [rememberMe, setRememberMe] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setErrors({}); // Clear previous errors
-    
+
     try {
-      const result = await login(email, password);
-      if (result.success) {
-        toast.success('Logged in successfully!');
-        navigate('/workspaces');
-      } else {
-        // Display specific error message from backend
-        toast.error(result.error || 'Failed to log in. Please check your credentials.');
-        // Set form errors for display
-        if (result.error && result.error.includes('Email')) {
-          setErrors({ email: result.error });
-        } else if (result.error && result.error.includes('Password')) {
-          setErrors({ password: result.error });
-        } else if (result.error) {
-          setErrors({ general: result.error });
-        }
-      }
+      await login(email, password);
+      // Success is implied by redirect
+      navigate('/workspaces');
     } catch (error) {
-      toast.error('Failed to connect to server. Please try again.');
-      setErrors({ general: 'Connection error. Please try again.' });
+      console.error(error);
+      const msg = error.response?.data?.message || 'Login failed. Check your credentials.';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl">
-        {/* Single large rounded card centered in viewport */}
-        <div className="rounded-3xl overflow-hidden shadow-2xl bg-elevated grid grid-cols-1 lg:grid-cols-2">
-          {/* Left Panel - Login Form (Primary Focus) */}
-          <div className="p-12 md:p-16 bg-surface">
-            <div className="max-w-sm mx-auto">
-              <div className="flex justify-center mb-10">
-                <Logo size="lg" />
-              </div>
-              
-              <h1 className="text-3xl font-semibold tracking-tight text-white mb-2">Welcome back</h1>
-              <p className="text-text-secondary mb-10">Sign in to your Cloudiverse account</p>
+    <div className="font-display bg-background-light dark:bg-background-dark min-h-screen relative overflow-hidden">
+      <AuthHeader />
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {errors.general && (
-                  <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-200 text-sm">
-                    {errors.general}
-                  </div>
-                )}
-                
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-text-primary mb-2">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-text-subtle" />
-                    </div>
-                    <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 ${
-                        errors.email ? 'border-red-500' : 'border-border'
-                      }`}
-                      placeholder="you@company.com"
-                      required
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-400">{errors.email}</p>
-                  )}
-                </div>
+      {/* Background Gradients (Fixed) */}
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-tr from-primary/20 via-blue-500/10 to-purple-500/20 rounded-full blur-[120px] pointer-events-none opacity-60 dark:opacity-30 z-0"></div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label htmlFor="password" className="block text-sm font-medium text-text-primary">
-                      Password
-                    </label>
-                    <a href="#" className="text-sm text-primary hover:underline">
-                      Forgot password?
-                    </a>
-                  </div>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-text-subtle" />
-                    </div>
-                    <input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10 ${
-                        errors.password ? 'border-red-500' : 'border-border'
-                      }`}
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5 text-text-subtle hover:text-text-primary" />
-                      ) : (
-                        <Eye className="h-5 w-5 text-text-subtle hover:text-text-primary" />
-                      )}
-                    </button>
-                  </div>
-                  {errors.password && (
-                    <p className="mt-1 text-sm text-red-400">{errors.password}</p>
-                  )}
-                </div>
+      {/* Main Content Container with Top Padding */}
+      <div className="relative z-10 pt-[72px] min-h-screen flex flex-col items-center justify-center pb-12">
 
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 text-primary focus:ring-primary border-border rounded bg-background"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-text-secondary">
-                    Remember me
-                  </label>
-                </div>
+        <div className="w-full max-w-[460px] bg-white/80 dark:bg-card-dark/80 backdrop-blur-2xl rounded-[20px] shadow-2xl border border-white/60 dark:border-white/5 overflow-hidden p-10 box-border mt-8">
 
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-blue-500/10 text-primary mb-5 shadow-inner border border-white/20">
+              <span className="material-symbols-outlined text-[28px]">waving_hand</span>
+            </div>
+            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Welcome Back</h2>
+            <p className="text-base text-gray-500 dark:text-gray-400 mt-2 font-medium">Please enter your details to sign in.</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-200">Email Address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl bg-white dark:bg-black/20 border-2 border-transparent focus:border-primary/20 dark:focus:border-primary/20 bg-gray-50/50 dark:bg-white/5 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-400 font-medium"
+                placeholder="het@gmail.com"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-200">Password</label>
+              <div className="relative group">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-12 px-4 pr-12 rounded-xl bg-white dark:bg-black/20 border-2 border-transparent focus:border-primary/20 dark:focus:border-primary/20 bg-gray-50/50 dark:bg-white/5 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-400 font-medium"
+                  placeholder="Enter your password"
+                  required
+                />
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3.5 px-4 rounded-lg font-medium hover:opacity-90 transition-opacity duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary"
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
-                  {loading ? (
-                    <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Signing in...
-                    </span>
-                  ) : (
-                    'Sign in'
-                  )}
+                  <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility' : 'visibility_off'}</span>
                 </button>
-              </form>
+              </div>
 
-              <div className="mt-10 text-center">
-                <p className="text-sm text-text-secondary">
-                  Don't have an account?{' '}
-                  <Link to="/register" className="font-medium text-primary hover:underline">
-                    Sign up
-                  </Link>
-                </p>
+              <div className="flex justify-between items-center pt-1">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="rounded border-gray-300 text-primary focus:ring-primary bg-gray-100 dark:bg-white/10" />
+                  <span className="text-sm font-medium text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-300 transition-colors">Remember me</span>
+                </label>
+                <Link to="/forgot-password" className="text-sm font-bold text-primary hover:text-blue-600 transition-colors">
+                  Forgot Password?
+                </Link>
               </div>
             </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-14 mt-2 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.01] disabled:opacity-70 disabled:hover:scale-100 flex items-center justify-center gap-2 text-lg active:scale-[0.98]"
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+              {!loading && <span className="material-symbols-outlined text-[20px] font-bold">arrow_forward</span>}
+            </button>
+          </form>
+
+          <div className="mt-10 pt-6 border-t border-gray-100 dark:border-white/5 text-center">
+            <p className="text-gray-500 dark:text-gray-400 font-medium">
+              Don't have an account?
+              <Link to="/register" className="font-bold text-primary hover:text-blue-600 ml-1 transition-colors">Create account</Link>
+            </p>
           </div>
 
-          {/* Right Panel - Illustration (Secondary, hides on small screens) */}
-          <div className="hidden lg:block bg-gradient-to-br from-surface to-background p-16 relative overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="absolute w-48 h-48 bg-primary/5 rounded-full blur-2xl -top-24 -right-24"></div>
-              <div className="absolute w-48 h-48 bg-secondary/5 rounded-full blur-2xl -bottom-24 -left-24"></div>
-              <div className="relative z-10 text-center max-w-sm">
-                <Logo size="xl" className="text-primary/20 mx-auto mb-6" />
-                <h2 className="text-2xl font-bold text-text-primary mb-4">Cloud Architecture Planning</h2>
-                <p className="text-text-secondary">
-                  From idea to infrastructure code in minutes. Design, compare, and deploy cloud architectures with AI assistance.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

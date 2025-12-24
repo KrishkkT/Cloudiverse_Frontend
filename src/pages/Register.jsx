@@ -1,266 +1,114 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Eye, EyeOff, Mail, Lock, User, Building } from 'lucide-react';
 import { toast } from 'react-toastify';
-import Logo from '../components/Logo';
+import { useAuth } from '../context/AuthContext';
+import AuthHeader from '../components/AuthHeader';
 
 const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [company, setCompany] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({}); // Add state for form errors
   const navigate = useNavigate();
   const { register } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Clear previous errors
-    setErrors({});
-    
-    // Client-side validation
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
-      setErrors({ confirmPassword: 'Passwords do not match' });
-      return;
-    }
-    
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
-      setErrors({ password: 'Password must be at least 6 characters' });
-      return;
-    }
-    
     setLoading(true);
-    
+
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const result = await register(email, password, name, company);
-      if (result.success) {
-        toast.success('Account created successfully!');
-        navigate('/workspaces');
-      } else {
-        // Display specific error message from backend
-        toast.error(result.error || 'Failed to create account. Please try again.');
-        // Set form errors for display
-        if (result.error && result.error.includes('Email')) {
-          setErrors({ email: result.error });
-        } else if (result.error && result.error.includes('Password')) {
-          setErrors({ password: result.error });
-        } else if (result.error && result.error.includes('Name')) {
-          setErrors({ name: result.error });
-        } else if (result.error) {
-          setErrors({ general: result.error });
-        }
-      }
+      await register(name, email, password);
+      toast.success('Account created! Welcome to Cloudiverse.');
+      navigate('/workspaces');
     } catch (error) {
-      toast.error('Failed to connect to server. Please try again.');
-      setErrors({ general: 'Connection error. Please try again.' });
+      console.error(error);
+      const msg = error.response?.data?.message || 'Registration failed.';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl">
-        {/* Single large rounded card centered in viewport */}
-        <div className="rounded-3xl overflow-hidden shadow-2xl bg-elevated grid grid-cols-1 lg:grid-cols-2">
-          {/* Left Panel - Signup Form (Primary Focus) */}
-          <div className="p-12 md:p-16 bg-surface">
-            <div className="max-w-sm mx-auto">
-              <div className="flex justify-center mb-10">
-                <Logo size="lg" />
-              </div>
-              
-              <h1 className="text-3xl font-semibold tracking-tight text-white mb-2">Create your account</h1>
-              <p className="text-text-secondary mb-10">Join Cloudiverse to start designing cloud architectures</p>
+    <div className="font-display bg-background-light dark:bg-background-dark min-h-screen relative overflow-hidden">
+      <AuthHeader />
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {errors.general && (
-                  <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-200 text-sm">
-                    {errors.general}
-                  </div>
-                )}
-                
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-text-primary mb-2">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-text-subtle" />
-                    </div>
-                    <input
-                      id="name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 ${
-                        errors.name ? 'border-red-500' : 'border-border'
-                      }`}
-                      placeholder="John Doe"
-                      required
-                    />
-                  </div>
-                  {errors.name && (
-                    <p className="mt-1 text-sm text-red-400">{errors.name}</p>
-                  )}
-                </div>
+      {/* Background Gradients */}
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-tr from-primary/20 via-blue-500/10 to-purple-500/20 rounded-full blur-[120px] pointer-events-none opacity-60 dark:opacity-30 z-0"></div>
 
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-text-primary mb-2">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-text-subtle" />
-                    </div>
-                    <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 ${
-                        errors.email ? 'border-red-500' : 'border-border'
-                      }`}
-                      placeholder="you@company.com"
-                      required
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-400">{errors.email}</p>
-                  )}
-                </div>
+      {/* Main Content Container with Top Padding */}
+      <div className="relative z-10 pt-[72px] min-h-screen flex flex-col items-center justify-center pb-12">
 
-                <div>
-                  <label htmlFor="company" className="block text-sm font-medium text-text-primary mb-2">
-                    Company (Optional)
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building className="h-5 w-5 text-text-subtle" />
-                    </div>
-                    <input
-                      id="company"
-                      type="text"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10"
-                      placeholder="Your company name"
-                    />
-                  </div>
-                </div>
+        <div className="w-full max-w-[460px] bg-white/80 dark:bg-card-dark/80 backdrop-blur-2xl rounded-[20px] shadow-2xl border border-white/60 dark:border-white/5 overflow-hidden p-10 box-border mt-8">
 
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-text-primary mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-text-subtle" />
-                    </div>
-                    <input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10 ${
-                        errors.password ? 'border-red-500' : 'border-border'
-                      }`}
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5 text-text-subtle hover:text-text-primary" />
-                      ) : (
-                        <Eye className="h-5 w-5 text-text-subtle hover:text-text-primary" />
-                      )}
-                    </button>
-                  </div>
-                  {errors.password && (
-                    <p className="mt-1 text-sm text-red-400">{errors.password}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-primary mb-2">
-                    Confirm Password
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-text-subtle" />
-                    </div>
-                    <input
-                      id="confirmPassword"
-                      type={showPassword ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full px-4 py-3.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10 pr-10 ${
-                        errors.confirmPassword ? 'border-red-500' : 'border-border'
-                      }`}
-                      placeholder="••••••••"
-                      required
-                    />
-                  </div>
-                  {errors.confirmPassword && (
-                    <p className="mt-1 text-sm text-red-400">{errors.confirmPassword}</p>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3.5 px-4 rounded-lg font-medium hover:opacity-90 transition-opacity duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Creating account...
-                    </span>
-                  ) : (
-                    'Create Account'
-                  )}
-                </button>
-              </form>
-
-              <div className="mt-10 text-center">
-                <p className="text-sm text-text-secondary">
-                  Already have an account?{' '}
-                  <Link to="/login" className="font-medium text-primary hover:underline">
-                    Sign in
-                  </Link>
-                </p>
-              </div>
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-blue-500/10 text-primary mb-5 shadow-inner border border-white/20">
+              <span className="material-symbols-outlined text-[28px]">person_add</span>
             </div>
+            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Create Account</h2>
+            <p className="text-base text-gray-500 dark:text-gray-400 mt-2 font-medium">Join Cloudiverse to start building</p>
           </div>
 
-          {/* Right Panel - Illustration (Secondary, hides on small screens) */}
-          <div className="hidden lg:block bg-gradient-to-br from-surface to-background p-16 relative overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="absolute w-48 h-48 bg-primary/5 rounded-full blur-2xl -top-24 -right-24"></div>
-              <div className="absolute w-48 h-48 bg-secondary/5 rounded-full blur-2xl -bottom-24 -left-24"></div>
-              <div className="relative z-10 text-center max-w-sm">
-                <Logo size="xl" className="text-primary/20 mx-auto mb-6" />
-                <h2 className="text-2xl font-bold text-text-primary mb-4">Cloud Architecture Planning</h2>
-                <p className="text-text-secondary">
-                  Join thousands of architects designing cloud infrastructure with AI assistance. Start building better systems today.
-                </p>
-              </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-200">Full Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl bg-white dark:bg-black/20 border-2 border-transparent focus:border-primary/20 dark:focus:border-primary/20 bg-gray-50/50 dark:bg-white/5 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-400 font-medium"
+                placeholder="Krish Thakker"
+                required
+              />
             </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-200">Email Address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl bg-white dark:bg-black/20 border-2 border-transparent focus:border-primary/20 dark:focus:border-primary/20 bg-gray-50/50 dark:bg-white/5 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-400 font-medium"
+                placeholder="het@gmail.com"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 dark:text-gray-200">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl bg-white dark:bg-black/20 border-2 border-transparent focus:border-primary/20 dark:focus:border-primary/20 bg-gray-50/50 dark:bg-white/5 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-400 font-medium"
+                placeholder="Min 6 characters"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-14 mt-2 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.01] disabled:opacity-70 disabled:hover:scale-100 flex items-center justify-center gap-2 text-lg active:scale-[0.98]"
+            >
+              {loading ? 'Creating Account...' : 'Sign Up'}
+              {!loading && <span className="material-symbols-outlined text-[20px] font-bold">arrow_forward</span>}
+            </button>
+          </form>
+
+          <div className="mt-10 pt-6 border-t border-gray-100 dark:border-white/5 text-center">
+            <p className="text-gray-500 dark:text-gray-400 font-medium">
+              Already have an account?
+              <Link to="/login" className="font-bold text-primary hover:text-blue-600 ml-1 transition-colors">Log in</Link>
+            </p>
           </div>
+
         </div>
       </div>
     </div>

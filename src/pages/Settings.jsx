@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { 
-  User, 
-  Bell, 
-  Shield, 
-  Palette, 
-  Download, 
-  Upload, 
+import {
+  User,
+  Bell,
+  Shield,
+  Palette,
+  Download,
+  Upload,
   AlertTriangle,
   Key,
   Globe,
@@ -18,7 +18,7 @@ const Settings = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [formData, setFormData] = useState({
-    name: 'John Doe',
+    name: 'Krish Thakker',
     email: user?.email || '',
     notifications: true,
     newsletter: false,
@@ -74,11 +74,10 @@ const Settings = () => {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 text-left ${
-                        activeTab === tab.id
+                      className={`w-full flex items-center space-x-3 px-4 py-3 text-left ${activeTab === tab.id
                           ? 'bg-primary/20 text-primary border-l-4 border-primary'
                           : 'text-text-secondary hover:bg-surface'
-                      }`}
+                        }`}
                     >
                       <Icon size={20} />
                       <span>{tab.name}</span>
@@ -113,7 +112,7 @@ const Settings = () => {
                       <p className="text-text-secondary text-sm">JPG, GIF or PNG. Max size of 5MB</p>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="form-group">
                       <label className="form-label">Full Name</label>
@@ -125,7 +124,7 @@ const Settings = () => {
                         className="form-input"
                       />
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">Email Address</label>
                       <input
@@ -139,7 +138,7 @@ const Settings = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex justify-end">
                 <button
                   onClick={handleSaveChanges}
@@ -170,7 +169,7 @@ const Settings = () => {
                     </div>
                     <button className="btn btn-secondary">Change</button>
                   </div>
-                  
+
                   <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
                     <div className="flex items-center space-x-4">
                       <div className="p-2 rounded-lg bg-primary/20">
@@ -192,7 +191,7 @@ const Settings = () => {
                       <div className="w-11 h-6 bg-surface rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
                     <div className="flex items-center space-x-4">
                       <div className="p-2 rounded-lg bg-secondary/20">
@@ -205,7 +204,7 @@ const Settings = () => {
                     </div>
                     <button className="btn btn-secondary">Generate</button>
                   </div>
-                  
+
                   <div className="card bg-red-500/10 border border-red-500/30">
                     <div className="card-body">
                       <div className="flex items-start">
@@ -251,7 +250,7 @@ const Settings = () => {
                       <div className="w-11 h-6 bg-surface rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
                     <div>
                       <h3 className="font-bold">Newsletter</h3>
@@ -268,7 +267,7 @@ const Settings = () => {
                       <div className="w-11 h-6 bg-surface rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
                     <div>
                       <h3 className="font-bold">Security Alerts</h3>
@@ -301,7 +300,7 @@ const Settings = () => {
                       <option value="system">System Default</option>
                     </select>
                   </div>
-                  
+
                   <div className="form-group">
                     <label className="form-label">Language</label>
                     <select
@@ -340,7 +339,7 @@ const Settings = () => {
                     </div>
                     <button className="btn btn-secondary">Update</button>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div className="form-group">
                       <label className="form-label">Billing Email</label>
@@ -351,7 +350,7 @@ const Settings = () => {
                         className="form-input"
                       />
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">Tax ID (Optional)</label>
                       <input
@@ -362,7 +361,7 @@ const Settings = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="form-group">
                     <label className="form-label">Address</label>
                     <textarea
@@ -373,7 +372,7 @@ const Settings = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="card">
                 <div className="card-header">
                   <h2 className="text-xl font-bold">Plan & Usage</h2>
@@ -386,7 +385,7 @@ const Settings = () => {
                     </div>
                     <button className="btn btn-secondary">Manage Subscription</button>
                   </div>
-                  
+
                   <div className="mt-6 space-y-4">
                     <div>
                       <div className="flex justify-between mb-1">
@@ -394,17 +393,17 @@ const Settings = () => {
                         <span className="text-sm">8/20</span>
                       </div>
                       <div className="w-full bg-surface rounded-full h-2">
-                        <div className="bg-primary h-2 rounded-full" style={{width: '40%'}}></div>
+                        <div className="bg-primary h-2 rounded-full" style={{ width: '40%' }}></div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <div className="flex justify-between mb-1">
                         <span className="text-sm text-text-secondary">Team Members</span>
                         <span className="text-sm">3/5</span>
                       </div>
                       <div className="w-full bg-surface rounded-full h-2">
-                        <div className="bg-secondary h-2 rounded-full" style={{width: '60%'}}></div>
+                        <div className="bg-secondary h-2 rounded-full" style={{ width: '60%' }}></div>
                       </div>
                     </div>
                   </div>
@@ -414,7 +413,7 @@ const Settings = () => {
           )}
         </div>
       </div>
-      
+
       {/* AI Dock */}
       <AIDock />
     </div>

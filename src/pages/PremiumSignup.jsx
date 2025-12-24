@@ -18,14 +18,14 @@ const PremiumSignup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
-    
+
     setLoading(true);
-    
+
     try {
       await signup(email, password, name);
       toast.success('Account created successfully!');
@@ -48,7 +48,7 @@ const PremiumSignup = () => {
               <div className="flex justify-center mb-10">
                 <Logo size="lg" />
               </div>
-              
+
               <h1 className="text-3xl font-semibold tracking-tight text-white mb-2">Create your account</h1>
               <p className="text-text-secondary mb-10">Join Cloudiverse to start designing cloud architectures</p>
 
@@ -67,7 +67,7 @@ const PremiumSignup = () => {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full px-4 py-3.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary pl-10"
-                      placeholder="John Doe"
+                      placeholder="Mukesh Ambani"
                       required
                     />
                   </div>
