@@ -59,8 +59,11 @@ const Docs = () => {
               </button>
             </div>
             <div className="flex items-center">
-              <Cloud className="h-8 w-8 text-primary mr-2" />
-              <span className="text-xl font-bold">Cloudiverse Docs</span>
+              <a href={'/'}><img
+                src="/cloudiverse.png"
+                alt="Cloudiverse Architect"
+                className="h-12 w-auto"
+              /></a>
             </div>
           </div>
         </div>
@@ -79,8 +82,8 @@ const Docs = () => {
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
                 className={`w-full flex items-center px-3 py-2 rounded-lg text-left transition-colors ${activeSection === section.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-text-secondary hover:bg-surface/80 hover:text-text-primary'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-text-secondary hover:bg-surface/80 hover:text-text-primary'
                   }`}
               >
                 {section.icon}

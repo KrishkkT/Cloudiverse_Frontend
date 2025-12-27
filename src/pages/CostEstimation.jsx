@@ -1,16 +1,16 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   Legend
 } from 'recharts';
 import { TrendingUp, DollarSign, Calendar, Download } from 'lucide-react';
@@ -131,13 +131,13 @@ const CostEstimation = () => {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip 
+                <Tooltip
                   formatter={(value) => [`$${value}`, 'Cost']}
-                  contentStyle={{ 
-                    backgroundColor: '#16181D', 
+                  contentStyle={{
+                    backgroundColor: '#16181D',
                     borderColor: '#1F2937',
                     borderRadius: '0.5rem'
-                  }} 
+                  }}
                 />
                 <Legend />
               </PieChart>
@@ -163,13 +163,13 @@ const CostEstimation = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" />
                 <XAxis dataKey="month" stroke="#9CA3AF" />
                 <YAxis stroke="#9CA3AF" />
-                <Tooltip 
+                <Tooltip
                   formatter={(value) => [`$${value}`, 'Cost']}
-                  contentStyle={{ 
-                    backgroundColor: '#16181D', 
+                  contentStyle={{
+                    backgroundColor: '#16181D',
                     borderColor: '#1F2937',
                     borderRadius: '0.5rem'
-                  }} 
+                  }}
                 />
                 <Legend />
                 <Bar dataKey="cost" fill="#3B82F6" />
@@ -251,9 +251,9 @@ const CostEstimation = () => {
           </div>
         </div>
       </div>
-      
-      {/* AI Dock */}
-      <AIDock />
+
+
+
     </div>
   );
 };
