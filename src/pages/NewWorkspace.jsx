@@ -1,35 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Play, Save, Loader } from 'lucide-react';
+import { Loader } from 'lucide-react';
 
 const NewWorkspace = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [appDescription, setAppDescription] = useState('');
-  const [projectName, setProjectName] = useState('New Project');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const creatingRef = React.useRef(false);
 
-  const handleCreateWorkspace = async () => {
-    if (!appDescription.trim()) {
-      alert('Please describe your system');
-      return;
-    }
-    
-    setLoading(true);
-    
+  useEffect(() => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    createWorkspaceAndRedirect();
+  }, []);
+
+  const createWorkspaceAndRedirect = async () => {
     try {
       const token = localStorage.getItem('token');
-      
+
       const requestData = {
-        name: projectName,
-        description: appDescription,
+        name: 'New Project',
+        description: '',
         project_data: {
-          appDescription,
-          projectName
+          appDescription: '',
+          projectName: 'New Project'
         }
       };
-      
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces`, {
         method: 'POST',
         headers: {
@@ -38,80 +37,61 @@ const NewWorkspace = () => {
         },
         body: JSON.stringify(requestData)
       });
-      
+
       if (response.ok) {
         const workspace = await response.json();
         // Navigate to the newly created workspace
-        navigate(`/workspace/${workspace.id}`);
+        navigate(`/workspace/${workspace.id}`, { replace: true });
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to create workspace');
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to create workspace');
+        setLoading(false);
       }
-    } catch (error) {
-      alert('Failed to create workspace');
-    } finally {
+    } catch (err) {
+      console.error('Error creating workspace:', err);
+      setError('Failed to create workspace. Please try again.');
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-text-primary mb-2">Create New Workspace</h1>
-          <p className="text-text-secondary">Brief the system you want to build. We'll design the architecture.</p>
-        </div>
-        
-        <div className="bg-surface border border-border rounded-xl p-8">
-          <div className="mb-6">
-            <label htmlFor="projectName" className="block text-sm font-medium text-text-primary mb-2">
-              Project Name
-            </label>
-            <input
-              type="text"
-              id="projectName"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-text-primary"
-              placeholder="Enter project name"
-            />
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="bg-surface border border-border rounded-xl p-8 max-w-md w-full text-center">
+          <div className="text-red-500 mb-4">
+            <span className="material-icons text-4xl">error_outline</span>
           </div>
-          
-          <div className="mb-8">
-            <label htmlFor="appDescription" className="block text-sm font-medium text-text-primary mb-2">
-              System Description
-            </label>
-            <textarea
-              id="appDescription"
-              value={appDescription}
-              onChange={(e) => setAppDescription(e.target.value)}
-              placeholder="Describe your system (e.g., A SaaS analytics platform for 50k concurrent users with PostgreSQL database, Redis caching, and CDN for static assets...)"
-              className="w-full h-64 bg-background border border-border rounded-lg p-4 text-text-primary placeholder-text-subtle focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-            />
-          </div>
-          
-          <div className="flex justify-end">
+          <h2 className="text-xl font-semibold text-text-primary mb-2">Error Creating Workspace</h2>
+          <p className="text-text-secondary mb-6">{error}</p>
+          <div className="flex space-x-3 justify-center">
             <button
-              onClick={handleCreateWorkspace}
-              disabled={!appDescription.trim() || loading}
-              className={`btn btn-primary px-6 py-3 flex items-center ${
-                !appDescription.trim() || loading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
+              onClick={() => navigate('/workspaces')}
+              className="btn btn-secondary px-4 py-2"
             >
-              {loading ? (
-                <>
-                  <Loader className="animate-spin mr-2" size={20} />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <Play size={20} className="mr-2" />
-                  Create Workspace
-                </>
-              )}
+              Back to Dashboard
+            </button>
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                createWorkspaceAndRedirect();
+              }}
+              className="btn btn-primary px-4 py-2"
+            >
+              Try Again
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <div className="text-center">
+        <Loader className="animate-spin text-primary mx-auto mb-4" size={48} />
+        <h2 className="text-xl font-semibold text-text-primary mb-2">Creating Workspace...</h2>
+        <p className="text-text-secondary">Setting up your new project</p>
       </div>
     </div>
   );

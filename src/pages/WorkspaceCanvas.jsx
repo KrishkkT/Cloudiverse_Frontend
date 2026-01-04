@@ -5,6 +5,11 @@ import toast, { Toaster } from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
+import FeedbackStep from '../components/FeedbackStep';
+import TerraformStep from '../components/TerraformStep';
+import RequirementsStep from '../components/RequirementsStep';
+import ArchitectureStep from '../components/ArchitectureStep';
+
 const WorkspaceCanvas = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -16,10 +21,125 @@ const WorkspaceCanvas = () => {
     const [projectData, setProjectData] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [selectedOption, setSelectedOption] = useState(null);
-    const [workspaceId, setWorkspaceId] = useState(null); // Track ID for updates
-    const [aiSnapshot, setAiSnapshot] = useState(null); // Frozen AI intent snapshot
-    const [costEstimation, setCostEstimation] = useState(null); // Step 3 cost data
-    const [costProfile, setCostProfile] = useState('COST_EFFECTIVE'); // COST_EFFECTIVE | HIGH_PERFORMANCE
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [usageProfile, setUsageProfile] = useState(null); // Step 2.5 data
+
+    const [aiSnapshot, setAiSnapshot] = useState(null);
+    const [costEstimation, setCostEstimation] = useState(null);
+    const [costProfile, setCostProfile] = useState('cost_effective');
+    const [workspaceId, setWorkspaceId] = useState(id === 'new' ? null : id);
+    const [selectedProvider, setSelectedProvider] = useState(null); // Explicit selection
+    const [architectureData, setArchitectureData] = useState(null);
+    const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+    const [requirementsData, setRequirementsData] = useState(null);
+
+    // Polish-to-Production States
+    const [isAssumptionsDrifted, setIsAssumptionsDrifted] = useState(false);
+    const [isUsageUserModified, setIsUsageUserModified] = useState(false);
+    const [initialDescription, setInitialDescription] = useState('');
+
+    // Detect Drift
+    useEffect(() => {
+        // Only show drift warning if cost estimation exists AND description has actually changed
+        // after initial load (not on page refresh when both values are set simultaneously)
+        if (costEstimation && initialDescription && description !== initialDescription) {
+            setIsAssumptionsDrifted(true);
+        } else if (costEstimation && initialDescription && description === initialDescription) {
+            // If they match, clear any drift warning
+            setIsAssumptionsDrifted(false);
+        }
+    }, [description, initialDescription, costEstimation]);
+
+    // STEP 2.5: Usage Prediction Handler
+    const handleAnalyzeUsage = async () => {
+        if (usageProfile) {
+            console.log("Usage profile already exists, skipping redundant AI call.");
+            setStep('usage_review');
+            return;
+        }
+        setIsProcessing(true);
+        setStep('processing_usage');
+
+        try {
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            const res = await axios.post(`${API_BASE}/api/workflow/predict-usage`, {
+                intent: aiSnapshot,
+                infraSpec: infraSpec
+            }, { headers });
+
+            setTimeout(() => {
+                setUsageProfile(res.data.data); // Store { usage_profile, rationale }
+                setStep('usage_review');
+                setIsProcessing(false);
+                toast.success("Usage estimates generated!");
+            }, 1000);
+
+        } catch (err) {
+            console.error("Usage Prediction Error:", err);
+            setIsProcessing(false);
+            setStep('review_spec');
+            toast.error("Failed to estimate usage. Skipping to manual mode.");
+        }
+    };
+
+    // STEP 3: Cost Estimation Handler (Updated to use Usage Profile)
+    const handleProceedToCostEstimation = async () => {
+        if (!infraSpec || !aiSnapshot) {
+            toast.error("Missing infrastructure data. Please restart.");
+            return;
+        }
+
+        setIsProcessing(true);
+        setStep('processing_cost');
+        toast.loading("Analyzing costs across providers...", { id: 'cost-analysis' });
+
+        try {
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            // Send usage profile if available (Layer B activation)
+            const payload = {
+                infraSpec,
+                intent: aiSnapshot,
+                cost_profile: costProfile,
+                usage_profile: {
+                    ...usageProfile?.usage_profile,
+                    source: isUsageUserModified ? 'user_provided' : 'ai_inferred'
+                }
+            };
+
+            // Reset drift states on new analysis
+            setIsAssumptionsDrifted(false);
+            setInitialDescription(description);
+
+            const response = await axios.post(`${API_BASE}/api/workflow/cost-analysis`, payload, { headers });
+
+            toast.dismiss('cost-analysis');
+
+            if (response.data.step === 'cost_estimation') {
+                setTimeout(() => {
+                    const data = response.data.data;
+                    setCostEstimation(data);
+                    setSelectedProvider(data.recommended?.provider || data.recommended_provider);
+                    setStep('cost_estimation');
+                    toast.success("Cost analysis complete!");
+                }, 100);
+            } else {
+                throw new Error("Unexpected response from cost analysis");
+            }
+
+        } catch (err) {
+            console.error("Cost Analysis Error:", err);
+            toast.dismiss('cost-analysis');
+            toast.error("Failed to analyze costs. Please try again.");
+            setStep('review_spec');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
 
     // Load Workspace Data if ID is present
     useEffect(() => {
@@ -70,6 +190,9 @@ const WorkspaceCanvas = () => {
                         setProjectData(prev => ({ ...prev, ...savedState.projectData }));
                     }
                 }
+
+                // Set initial description to prevent false assumption drift warnings
+                setInitialDescription(description);
 
                 // If loading into a completed state, ensure toast doesn't annoy user, 
                 // but console log success
@@ -319,54 +442,15 @@ const WorkspaceCanvas = () => {
         }
     }, [step, infraSpec, costEstimation]);
 
-    // STEP 3: Cost Estimation Handler
-    const handleProceedToCostEstimation = async () => {
-        if (!infraSpec || !aiSnapshot) {
-            toast.error("Missing infrastructure data. Please restart.");
-            return;
-        }
 
-        setIsProcessing(true);
-        setStep('processing_cost');
-        toast.loading("Analyzing costs across providers...", { id: 'cost-analysis' });
-
-        try {
-            const token = localStorage.getItem('token');
-            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-            const response = await axios.post(`${API_BASE}/api/workflow/cost-analysis`, {
-                infraSpec,
-                intent: aiSnapshot,
-                cost_profile: costProfile
-            }, { headers });
-
-            toast.dismiss('cost-analysis');
-
-            if (response.data.step === 'cost_estimation') {
-                setCostEstimation(response.data.data);
-                setStep('cost_estimation');
-                toast.success("Cost analysis complete!");
-            } else {
-                throw new Error("Unexpected response from cost analysis");
-            }
-
-        } catch (err) {
-            console.error("Cost Analysis Error:", err);
-            toast.dismiss('cost-analysis');
-            toast.error("Failed to analyze costs. Please try again.");
-            setStep('review_spec');
-        } finally {
-            setIsProcessing(false);
-        }
-    };
 
     return (
-        <div className="flex h-screen bg-[#0a0a0a] text-white font-inter overflow-hidden relative selection:bg-primary/30">
+        <div className="flex h-screen bg-background text-white font-inter overflow-hidden relative selection:bg-primary/30">
             <Toaster position="top-right" toastOptions={{
                 style: {
-                    background: '#1A1A1A',
+                    background: 'var(--color-surface, #171E2B)',
                     color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.1)'
+                    border: '1px solid var(--color-border, #2E3645)'
                 }
             }} />
             {/* Background Gradients */}
@@ -376,7 +460,7 @@ const WorkspaceCanvas = () => {
             </div>
 
             {/* Sidebar (Glass) */}
-            <div className="w-64 bg-white/5 backdrop-blur-xl border-r border-white/10 flex flex-col justify-between p-6 hidden md:flex z-10">
+            <div className="w-64 bg-surface/80 backdrop-blur-xl border-r border-border flex flex-col justify-between p-6 hidden md:flex z-10">
                 <div className="space-y-8">
                     <div className="flex items-center space-x-3 text-primary font-bold text-xl tracking-tight">
                         <span className="material-icons text-2xl">cloud_circle</span>
@@ -404,8 +488,8 @@ const WorkspaceCanvas = () => {
                             onClick={() => infraSpec && setStep('review_spec')}
                         >
                             <span className="material-icons text-sm">schema</span>
-                            <span>Architecture</span>
-                            {costEstimation && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            <span>Specification</span>
+                            {infraSpec && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
                         <div
@@ -419,16 +503,53 @@ const WorkspaceCanvas = () => {
                             <span>Cost Estimator</span>
                             {costEstimation && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
-                    </nav>
-                </div>
-                <div>
-                    <div className="p-4 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl border border-white/5">
-                        <div className="text-xs text-gray-400 font-medium mb-1">MONOPOLY CORE</div>
-                        <div className="flex items-center space-x-2 text-green-400 text-xs">
-                            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                            <span>System Active</span>
+
+                        <div
+                            className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
+                            ${step === 'requirements'
+                                    ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
+                                    : (!costEstimation ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                            onClick={() => costEstimation && setStep('requirements')}
+                        >
+                            <span className="material-icons text-sm">security</span>
+                            <span>NFRs</span>
+                            {requirementsData && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
-                    </div>
+
+                        <div
+                            className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
+                            ${step === 'architecture'
+                                    ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
+                                    : (!requirementsData ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                            onClick={() => requirementsData && setStep('architecture')}
+                        >
+                            <span className="material-icons text-sm">design_services</span>
+                            <span>Architecture</span>
+                            {architectureData && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                        </div>
+
+
+
+                        <div
+                            className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
+                            ${step === 'terraform_view'
+                                    ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
+                                    : (!architectureData ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                            onClick={() => architectureData && setStep('terraform_view')}
+                        >
+                            <span className="material-icons text-sm">code</span>
+                            <span>Terraform</span>
+                            {architectureData && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                        </div>
+
+                        <div
+                            className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all cursor-pointer text-gray-400 hover:bg-white/5`}
+                            onClick={() => navigate(`/workspace/${workspaceId}/settings`)}
+                        >
+                            <span className="material-icons text-sm">settings</span>
+                            <span>Settings</span>
+                        </div>
+                    </nav>
                 </div>
             </div>
 
@@ -460,8 +581,25 @@ const WorkspaceCanvas = () => {
                 </header>
 
                 {/* Content Area */}
-                <div className="flex-1 p-8 flex justify-center">
-                    <div className="w-full max-w-5xl space-y-12">
+                <div className="flex-1 p-8 flex">
+                    <div className="w-full max-w-5xl space-y-12 mx-auto">
+                        {/* OPTION A: ASSUMPTION DRIFT WARNING */}
+                        {isAssumptionsDrifted && (
+                            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex items-center justify-between animate-shake">
+                                <div className="flex items-center space-x-3">
+                                    <span className="material-icons text-yellow-500">warning</span>
+                                    <div className="text-sm text-yellow-200">
+                                        <b>Assumption Drift:</b> The project description has changed. Previous cost estimates may no longer be valid.
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => handleAnalyze()}
+                                    className="px-4 py-2 bg-yellow-500 text-black font-bold text-xs rounded-lg hover:bg-yellow-400 transition-colors"
+                                >
+                                    Re-Analyze
+                                </button>
+                            </div>
+                        )}
 
                         {/* STEP: PROCESSING ANIMATION */}
                         {(step === 'processing' || step === 'processing_spec') && (
@@ -477,7 +615,7 @@ const WorkspaceCanvas = () => {
                                     <h2 className="text-2xl font-bold text-white">
                                         {step === 'processing' ? 'Analyzing Intent...' : 'Generating Blueprint...'}
                                     </h2>
-                                    <p className="text-gray-400 animate-pulse">Applying Layers 1-14 (Monopoly Logic)</p>
+                                    <p className="text-gray-400 animate-pulse">Architecting your production-grade infrastructure</p>
                                 </div>
                             </div>
                         )}
@@ -495,7 +633,7 @@ const WorkspaceCanvas = () => {
                                 </div>
                                 <div className="relative group">
                                     <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                                    <div className="relative bg-[#0F0F0F] border border-white/10 rounded-2xl p-2 shadow-2xl">
+                                    <div className="relative bg-surface border border-border rounded-2xl p-2 shadow-2xl">
                                         <textarea
                                             className="w-full h-48 bg-transparent text-xl p-8 focus:outline-none resize-none placeholder-gray-600 text-gray-200 font-light leading-relaxed"
                                             placeholder="e.g., I need a highly scalable e-commerce backend with microservices, handling 50k concurrent users, and strict PCI compliance..."
@@ -520,6 +658,41 @@ const WorkspaceCanvas = () => {
                             </div>
                         )}
 
+                        {/* STEP: QUESTION (AI Clarification) */}
+                        {step === 'question' && currentQuestion && (
+                            <div className="space-y-8 animate-fade-in-up max-w-2xl mx-auto mt-12 pb-20">
+                                <div className="text-center space-y-4">
+                                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <span className="material-icons text-primary text-3xl">psychology</span>
+                                    </div>
+                                    <h2 className="text-3xl font-bold text-white">Clarifying Requirements</h2>
+                                    <p className="text-gray-400">{currentQuestion.clarifying_question}</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4">
+                                    {currentQuestion.suggested_options?.map((opt, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => handleAnswerQuestion(typeof opt === 'object' ? (opt.value || opt.label) : opt)}
+                                            className={`p-6 bg-surface border rounded-2xl text-left transition-all group relative overflow-hidden
+                                                ${selectedOption === (typeof opt === 'object' ? (opt.value || opt.label) : opt) ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-white/20'}`}
+                                        >
+                                            <div className="relative z-10 flex items-center justify-between">
+                                                <div>
+                                                    <div className="text-lg font-bold text-white mb-1">{typeof opt === 'object' ? opt.label : opt}</div>
+                                                    {opt.description && <div className="text-sm text-gray-400 line-clamp-2">{opt.description}</div>}
+                                                </div>
+                                                <span className="material-icons text-gray-600 group-hover:text-primary transition-colors">arrow_forward</span>
+                                            </div>
+                                            {selectedOption === (typeof opt === 'object' ? (opt.value || opt.label) : opt) && (
+                                                <div className="absolute inset-0 bg-primary/5 animate-pulse"></div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* STEP: CONFIRM INTENT (Mandatory per Doc) */}
                         {step === 'confirm_intent' && currentQuestion && (
                             <div className="space-y-8 animate-fade-in-up max-w-3xl mx-auto mt-12 pb-20">
@@ -528,748 +701,1031 @@ const WorkspaceCanvas = () => {
                                     <p className="text-gray-400">We've analyzed your requirements. Please confirm this summary before we generate the infrastructure.</p>
                                 </div>
 
-                                <div className="bg-[#0F0F0F] border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+                                <div className="bg-surface border border-border rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[100px] -mr-32 -mt-32"></div>
+
                                     {/* Summary Card */}
-                                    <div className="space-y-6 relative z-10">
-                                        <div className="flex items-center space-x-3 mb-2">
+                                    <div className="space-y-8 relative z-10">
+                                        <div className="flex items-center justify-between mb-2">
                                             <span className="px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-[10px] font-bold uppercase tracking-widest">
                                                 AI Intent Snapshot
                                             </span>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-2 gap-6">
-                                                <div>
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-1">Primary Domain</div>
-                                                    <div className="text-white font-medium capitalize">{currentQuestion.intent?.primary_domain?.replace(/_/g, ' ') || 'General'}</div>
+                                            <div className="flex items-center space-x-2">
+                                                <div className="flex items-center space-x-1">
+                                                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                                    <span className="text-[10px] text-gray-500 uppercase">Confirmed</span>
                                                 </div>
-                                                <div>
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-1">Workload Type</div>
-                                                    <div className="text-white font-medium capitalize">{currentQuestion.intent?.workload_type?.replace(/_/g, ' ') || 'Web App'}</div>
+                                                <div className="flex items-center space-x-1">
+                                                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                                    <span className="text-[10px] text-gray-500 uppercase">Excluded</span>
                                                 </div>
                                             </div>
+                                        </div>
 
-                                            {currentQuestion.features && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="space-y-6">
                                                 <div>
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-2">Detected Features</div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {Object.entries(currentQuestion.features).filter(([_, v]) => v).map(([key]) => (
-                                                            <span key={key} className="px-2 py-1 bg-white/5 border border-white/10 rounded text-xs text-gray-300 capitalize">
-                                                                {key.replace(/_/g, ' ')}
-                                                            </span>
-                                                        ))}
-                                                    </div>
+                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Goal</h4>
+                                                    <p className="text-white font-medium capitalize prose prose-invert">{currentQuestion.intent?.primary_domain?.replace(/_/g, ' ') || 'Building an application'}</p>
                                                 </div>
-                                            )}
-
-                                            {currentQuestion.risk_domains && currentQuestion.risk_domains.length > 0 && (
-                                                <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-xl space-y-2">
-                                                    <div className="text-xs text-red-400 uppercase font-bold flex items-center space-x-2">
-                                                        <span className="material-icons text-sm">warning</span>
-                                                        <span>Identified Risks</span>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {currentQuestion.risk_domains.map((risk, idx) => (
-                                                            <span key={idx} className="text-sm text-gray-300 capitalize">{risk}</span>
-                                                        ))}
-                                                    </div>
+                                                <div>
+                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Workload Pattern</h4>
+                                                    <p className="text-white/80 text-sm italic">{currentQuestion.intent?.workload_type?.replace(/_/g, ' ') || 'Standard Workload'}</p>
                                                 </div>
-                                            )}
-                                        </div>
 
-                                        <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4">
-                                            <button
-                                                onClick={() => handleConfirmation(currentQuestion.full_analysis)}
-                                                className="flex-1 py-4 bg-primary text-black font-bold rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex items-center justify-center space-x-2"
-                                            >
-                                                <span>Correct, Generate Spec</span>
-                                                <span className="material-icons">check_circle</span>
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    // Reset entire flow to start fresh
-                                                    setStep('input');
-                                                    setAiSnapshot(null);
-                                                    setHistory([]);
-                                                    setCurrentQuestion(null);
-                                                }}
-                                                className="flex-1 py-4 bg-white/5 border border-white/10 text-white font-bold rounded-xl hover:bg-white/10 transition-all flex items-center justify-center space-x-2"
-                                            >
-                                                <span>Incorrect, Edit Description</span>
-                                                <span className="material-icons">edit</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* STEP: QUESTION (Refine) */}
-                        {step === 'question' && currentQuestion && (
-                            <div className="space-y-8 animate-fade-in-up max-w-3xl mx-auto mt-12 pb-20">
-                                <div className="flex items-start space-x-6">
-                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center text-primary shadow-lg shadow-primary/10">
-                                        <span className="material-icons text-3xl">psychology</span>
-                                    </div>
-                                    <div className="flex-1 bg-white/5 rounded-3xl p-8 border border-white/10 shadow-2xl backdrop-blur-xl relative overflow-hidden group">
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[60px] -mr-10 -mt-10 group-hover:bg-primary/10 transition-all duration-700"></div>
-
-                                        <div className="flex items-center space-x-3 mb-4 relative z-10">
-                                            <span className="px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                                AI Reasoning
-                                            </span>
-                                            <span className="text-gray-500 text-xs uppercase tracking-wider">Clarification Needed</span>
-                                        </div>
-
-                                        <h3 className="text-3xl font-medium text-white mb-4 leading-tight tracking-tight">
-                                            Let's fine-tune the details.
-                                        </h3>
-                                        <p className="text-gray-300 text-lg font-light leading-relaxed max-w-2xl">
-                                            {currentQuestion.clarifying_question}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col gap-4 pl-0 md:pl-8 transition-all animate-fade-in-up delay-100">
-                                    {currentQuestion.suggested_options?.map((option, idx) => {
-                                        const isOther = option.toLowerCase().includes("other") || option.toLowerCase().includes("specify");
-                                        const isSelected = selectedOption === option;
-
-                                        return (
-                                            <div key={idx} className="space-y-4">
-                                                <button
-                                                    onClick={() => !isOther ? handleAnswerQuestion(option) : setSelectedOption(option)}
-                                                    className={`w-full p-5 rounded-2xl border text-left transition-all duration-300 group relative overflow-hidden flex items-center justify-between
-                                                ${isSelected
-                                                            ? 'bg-primary border-primary text-black shadow-xl shadow-primary/20 scale-[1.01]'
-                                                            : 'bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 text-gray-300 hover:text-white'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${isSelected ? 'border-black/20 bg-black/10' : 'border-white/10 bg-white/5'}`}>
-                                                            <span className="text-sm font-bold">{String.fromCharCode(65 + idx)}</span>
-                                                        </div>
-                                                        <span className="text-lg font-medium">{option}</span>
-                                                    </div>
-
-                                                    {!isOther && (
-                                                        <span className={`material-icons transition-all duration-300 ${isSelected ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 group-hover:opacity-50'}`}>
-                                                            arrow_forward
-                                                        </span>
-                                                    )}
-                                                    {isOther && (
-                                                        <span className={`material-icons transition-all duration-300 ${isSelected ? 'rotate-90' : ''}`}>
-                                                            expand_more
-                                                        </span>
-                                                    )}
-                                                </button>
-
-                                                {/* Custom Input Field for Other */}
-                                                {isOther && isSelected && (
-                                                    <div className="animate-fade-in bg-[#1a1a1a] p-6 rounded-2xl border border-white/10 ml-0 md:ml-4 border-l-4 border-l-primary shadow-inner">
-                                                        <label className="text-xs text-gray-500 uppercase font-bold mb-3 block tracking-wider">Specific Requirement Details</label>
-                                                        <div className="flex flex-col md:flex-row items-start space-y-3 md:space-y-0 md:space-x-3">
-                                                            <textarea
-                                                                className="w-full md:flex-1 bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-primary/50 min-h-[100px] resize-none text-base"
-                                                                placeholder="Please describe your specific constraints or requirements..."
-                                                                autoFocus
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                                                        e.preventDefault();
-                                                                        if (e.target.value.trim()) handleAnswerQuestion(e.target.value);
-                                                                    }
-                                                                }}
-                                                            />
-                                                            <button
-                                                                className="w-full md:w-auto p-4 bg-primary text-black rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex items-center justify-center space-x-2 font-bold"
-                                                                onClick={(e) => {
-                                                                    const textarea = e.currentTarget.previousElementSibling;
-                                                                    if (textarea.value.trim()) handleAnswerQuestion(textarea.value);
-                                                                }}
-                                                            >
-                                                                <span>Submit</span>
-                                                                <span className="material-icons">send</span>
-                                                            </button>
+                                                {/* Explicit Exclusions Section */}
+                                                {currentQuestion.exclusions && currentQuestion.exclusions.length > 0 && (
+                                                    <div>
+                                                        <h4 className="text-xs font-bold text-red-500/70 uppercase tracking-widest mb-2 flex items-center">
+                                                            <span className="material-icons text-xs mr-1">block</span>
+                                                            Explicit Exclusions
+                                                        </h4>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {currentQuestion.exclusions.map((ex, i) => (
+                                                                <span key={i} className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider line-through decoration-red-500/50">
+                                                                    {ex.replace(/_/g, ' ')}
+                                                                </span>
+                                                            ))}
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
-                                        );
-                                    })}
+
+                                            <div className="space-y-6">
+                                                <div className="bg-white/5 rounded-2xl p-5 border border-white/5">
+                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Feature Resolution</h4>
+                                                    <div className="space-y-4">
+                                                        {/* Confirmed Features */}
+                                                        <div className="space-y-2">
+                                                            <div className="text-[10px] text-green-500 font-bold uppercase">Confirmed Present</div>
+                                                            <ul className="grid grid-cols-1 gap-1.5">
+                                                                {Object.entries(currentQuestion.features || {}).filter(([_, v]) => v === true).map(([f, _], i) => (
+                                                                    <li key={i} className="flex items-center text-xs text-gray-200 bg-green-500/5 px-2 py-1 rounded">
+                                                                        <span className="material-icons text-[12px] text-green-500 mr-2">check_circle</span>
+                                                                        <span className="capitalize">{f.replace(/_/g, ' ')}</span>
+                                                                    </li>
+                                                                ))}
+                                                                {Object.values(currentQuestion.features || {}).filter(v => v === true).length === 0 && (
+                                                                    <li className="text-xs text-gray-500 italic">None detected.</li>
+                                                                )}
+                                                            </ul>
+                                                        </div>
+
+                                                        {/* Unknown / Not Assumed */}
+                                                        <div className="space-y-2">
+                                                            <div className="text-[10px] text-gray-500 font-bold uppercase">What we did NOT assume</div>
+                                                            <ul className="grid grid-cols-1 gap-1.5 opacity-60">
+                                                                {Object.entries(currentQuestion.features || {}).filter(([_, v]) => v === 'unknown' || v === false).map(([f, v], i) => (
+                                                                    <li key={i} className="flex items-center text-xs text-gray-400">
+                                                                        <span className="material-icons text-[12px] text-gray-600 mr-2">
+                                                                            {v === false ? 'block' : 'help_outline'}
+                                                                        </span>
+                                                                        <span className="capitalize">{f.replace(/_/g, ' ')}</span>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-6 border-t border-white/5 flex flex-col space-y-4">
+                                            <p className="text-xs text-gray-400 text-center">
+                                                <span className="material-icons text-[10px] align-middle mr-1">lock</span>
+                                                Confirming locks this intent as the <b>Single Source of Truth</b>.
+                                            </p>
+                                            <button
+                                                onClick={() => handleConfirmation(currentQuestion.full_analysis)}
+                                                className="w-full py-4 bg-primary hover:bg-primary-hover text-black font-extrabold rounded-2xl transition-all transform hover:scale-[1.01] shadow-xl shadow-primary/20 flex items-center justify-center space-x-3"
+                                            >
+                                                <span>Confirm & Generate Blueprint</span>
+                                                <span className="material-icons">rocket_launch</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* STEP: REVIEW SPEC (Tiered View per Step2.txt) */}
+
+                        {/* STEP 2: REVIEW SPEC (Architecture) */}
                         {step === 'review_spec' && infraSpec && (
-                            <div className="space-y-10 animate-fade-in pb-20">
-                                {/* TIER 1: DEFAULT VIEW - Summary & Scores */}
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    {/* Main Summary Card */}
-                                    <div className="lg:col-span-2 bg-[#0F0F0F] border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] -mr-20 -mt-20"></div>
-
-                                        <div className="relative z-10">
-                                            <div className="flex items-center space-x-3 mb-4">
-                                                <span className="px-3 py-1 bg-green-500/10 border border-green-500/20 text-green-400 rounded-full text-xs font-bold uppercase tracking-wider">
-                                                    Production Ready
-                                                </span>
-                                                <span className="px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-bold uppercase tracking-wider">
-                                                    {infraSpec.architecture_pattern?.replace(/_/g, ' ') || 'Three Tier Web'}
-                                                </span>
-                                            </div>
-
-                                            <h2 className="text-4xl font-bold mb-4 text-white tracking-tight">{infraSpec.project_name || 'Design Complete'}</h2>
-                                            <p className="text-gray-400 text-lg mb-8 leading-relaxed max-w-xl">{infraSpec.project_summary || 'No summary available.'}</p>
-
-                                            {/* Explanation Bullets */}
-                                            {infraSpec.explanations && infraSpec.explanations.length > 0 && (
-                                                <div className="space-y-2 mb-6">
-                                                    {infraSpec.explanations.slice(0, 4).map((exp, idx) => (
-                                                        <div key={idx} className="flex items-start space-x-2 text-sm text-gray-300">
-                                                            <span className="material-icons text-green-400 text-sm mt-0.5">check_circle</span>
-                                                            <span>{exp}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            <div className="flex items-center space-x-12 border-t border-white/5 pt-6">
-                                                <div>
-                                                    <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Availability</div>
-                                                    <div className="text-white font-mono text-lg flex items-center space-x-2">
-                                                        <span className="material-icons text-sm text-green-400">verified</span>
-                                                        <span>{infraSpec.nfr?.reliability?.availability_target || '99.9'}%</span>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Scale Tier</div>
-                                                    <div className="text-white font-mono text-lg flex items-center space-x-2">
-                                                        <span className="material-icons text-sm text-blue-400">equalizer</span>
-                                                        <span>{infraSpec.assumptions?.traffic_tier || 'Medium'}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Overall Score Card */}
-                                    <div className="bg-[#0F0F0F] border border-white/10 rounded-3xl p-8 flex flex-col justify-center items-center shadow-xl relative overflow-hidden">
-                                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-green-900/10 opacity-50"></div>
-                                        <div className="relative w-32 h-32 mb-6">
-                                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#1a1a1a" strokeWidth="2" />
-                                                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#22c55e" strokeWidth="2" strokeDasharray={`${infraSpec.scores?.overall || 85}, 100`} className="animate-[dash_1.5s_ease-out_forwards]" />
-                                            </svg>
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                <span className="text-4xl font-bold text-white tracking-tighter">{infraSpec.scores?.overall || 85}</span>
-                                                <span className="text-[10px] text-gray-500 uppercase">/ 100</span>
-                                            </div>
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-300 tracking-wide uppercase">Overall Score</span>
-                                        <div className="mt-4 flex space-x-4 text-xs">
-                                            <span className="text-green-400">Security: {infraSpec.scores?.security || 85}</span>
-                                            <span className="text-blue-400">Arch: {infraSpec.scores?.architecture || 85}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* TIER 2: ENGINEERING VIEW - Expandable Details */}
-                                <div className="bg-[#0F0F0F] border border-white/10 rounded-3xl overflow-hidden">
-                                    <button
-                                        onClick={() => setSelectedOption(selectedOption === 'tier2' ? null : 'tier2')}
-                                        className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-colors"
-                                    >
-                                        <div className="flex items-center space-x-3">
-                                            <span className="material-icons text-primary">engineering</span>
-                                            <span className="text-xl font-bold text-white">Engineering Details</span>
-                                            <span className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-gray-400">Tier 2</span>
-                                        </div>
-                                        <span className={`material-icons text-gray-400 transition-transform ${selectedOption === 'tier2' ? 'rotate-180' : ''}`}>expand_more</span>
-                                    </button>
-
-                                    {selectedOption === 'tier2' && (
-                                        <div className="p-6 pt-0 border-t border-white/5 animate-fade-in">
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                <div className="p-4 bg-white/5 rounded-xl">
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-2">Compute</div>
-                                                    <div className="text-white font-medium">{infraSpec.components?.compute?.execution_model?.replace(/_/g, ' ') || 'Orchestrated'}</div>
-                                                    <div className="text-sm text-gray-400 mt-1">Scaling: {infraSpec.components?.compute?.scaling_driver || 'CPU'}</div>
-                                                </div>
-                                                <div className="p-4 bg-white/5 rounded-xl">
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-2">Database</div>
-                                                    <div className="text-white font-medium capitalize">{infraSpec.components?.data?.database_type || 'Relational'}</div>
-                                                    <div className="text-sm text-gray-400 mt-1">Consistency: {infraSpec.components?.data?.consistency || 'Strong'}</div>
-                                                </div>
-                                                <div className="p-4 bg-white/5 rounded-xl">
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-2">Cache</div>
-                                                    <div className="text-white font-medium">{infraSpec.components?.cache?.recommended ? 'Enabled' : 'Disabled'}</div>
-                                                    <div className="text-sm text-gray-400 mt-1">Purpose: {infraSpec.components?.cache?.purpose?.replace(/_/g, ' ') || 'N/A'}</div>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-6 grid grid-cols-2 gap-4">
-                                                <div className="p-4 bg-white/5 rounded-xl">
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-2">NFRs</div>
-                                                    <div className="space-y-1 text-sm">
-                                                        <div className="flex justify-between"><span className="text-gray-400">Encryption at Rest</span><span className="text-green-400">Enabled</span></div>
-                                                        <div className="flex justify-between"><span className="text-gray-400">Encryption in Transit</span><span className="text-green-400">Enabled</span></div>
-                                                        <div className="flex justify-between"><span className="text-gray-400">Horizontal Scaling</span><span className="text-green-400">Enabled</span></div>
-                                                    </div>
-                                                </div>
-                                                <div className="p-4 bg-white/5 rounded-xl">
-                                                    <div className="text-xs text-gray-500 uppercase font-bold mb-2">Backup Policy</div>
-                                                    <div className="space-y-1 text-sm">
-                                                        <div className="flex justify-between"><span className="text-gray-400">Required</span><span className="text-green-400">Yes</span></div>
-                                                        <div className="flex justify-between"><span className="text-gray-400">Retention</span><span className="text-white">{infraSpec.constraints?.minimum_backup_retention_days || 7} days</span></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* TIER 3: ADVANCED/AUDIT VIEW - Full Details */}
-                                <div className="bg-[#0F0F0F] border border-white/10 rounded-3xl overflow-hidden">
-                                    <button
-                                        onClick={() => setSelectedOption(selectedOption === 'tier3' ? null : 'tier3')}
-                                        className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-colors"
-                                    >
-                                        <div className="flex items-center space-x-3">
-                                            <span className="material-icons text-yellow-400">security</span>
-                                            <span className="text-xl font-bold text-white">Advanced / Audit</span>
-                                            <span className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-gray-400">Tier 3</span>
-                                        </div>
-                                        <span className={`material-icons text-gray-400 transition-transform ${selectedOption === 'tier3' ? 'rotate-180' : ''}`}>expand_more</span>
-                                    </button>
-
-                                    {selectedOption === 'tier3' && (
-                                        <div className="p-6 pt-0 border-t border-white/5 animate-fade-in space-y-6">
-                                            {/* Constraints */}
-                                            <div>
-                                                <div className="text-xs text-gray-500 uppercase font-bold mb-3">Constraints & Policies</div>
-                                                <div className="bg-white/5 rounded-xl p-4 space-y-2 text-sm font-mono">
-                                                    {Object.entries(infraSpec.constraints || {}).map(([key, val]) => (
-                                                        <div key={key} className="flex justify-between">
-                                                            <span className="text-gray-400">{key.replace(/_/g, ' ')}</span>
-                                                            <span className={val === 'forbidden' ? 'text-red-400' : 'text-green-400'}>{String(val)}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Decision Provenance */}
-                                            <div>
-                                                <div className="text-xs text-gray-500 uppercase font-bold mb-3">Decision Provenance</div>
-                                                <div className="space-y-2">
-                                                    {(infraSpec.decision_trace || []).map((decision, idx) => (
-                                                        <div key={idx} className="bg-white/5 rounded-xl p-3 flex items-center justify-between text-sm">
-                                                            <div className="flex items-center space-x-3">
-                                                                <span className={`px-2 py-0.5 rounded text-xs ${decision.source === 'ai_signal' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
-                                                                    {decision.source === 'ai_signal' ? 'AI' : 'Rule'}
-                                                                </span>
-                                                                <span className="text-white">{decision.decision.replace(/_/g, ' ')}</span>
-                                                            </div>
-                                                            <span className="text-gray-400">{decision.reason.replace(/_/g, ' ')}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Full JSON */}
-                                            <div>
-                                                <div className="text-xs text-gray-500 uppercase font-bold mb-3">Full InfraSpec JSON</div>
-                                                <pre className="bg-black/50 rounded-xl p-4 text-xs text-gray-300 overflow-auto max-h-96 font-mono border border-white/5">
-                                                    {JSON.stringify(infraSpec, null, 2)}
-                                                </pre>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Modules List (Condensed) */}
-                                <div className="space-y-6">
-                                    <h3 className="text-xl font-bold text-white px-2 flex items-center space-x-2">
-                                        <span className="material-icons text-primary">layers</span>
-                                        <span>Infrastructure Blueprint</span>
-                                        <span className="text-sm font-normal text-gray-400">({infraSpec.modules?.length || 0} components)</span>
-                                    </h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        {infraSpec.modules?.slice(0, 8).map((module, index) => (
-                                            <div key={index} className="bg-white/5 border border-white/5 p-4 rounded-xl hover:border-primary/30 transition-all">
-                                                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{module.category}</span>
-                                                <h4 className="text-base font-semibold text-white mt-1">{module.service_name || module.type}</h4>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Next Step Action */}
-                                <div className="pt-8 border-t border-white/5">
-                                    {/* Cost Profile Selection */}
-                                    <div className="mb-6">
-                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Optimization Strategy</h4>
-                                        <div className="flex gap-4">
-                                            <button
-                                                onClick={() => setCostProfile('COST_EFFECTIVE')}
-                                                className={`flex-1 p-4 rounded-xl border transition-all ${costProfile === 'COST_EFFECTIVE'
-                                                    ? 'bg-green-500/20 border-green-500/50 text-green-400'
-                                                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center space-x-2">
-                                                    <span className="material-icons">savings</span>
-                                                    <span className="font-bold">Cost Effective</span>
-                                                </div>
-                                                <p className="text-xs mt-1 opacity-70">Optimize for lower monthly costs</p>
-                                            </button>
-                                            <button
-                                                onClick={() => setCostProfile('HIGH_PERFORMANCE')}
-                                                className={`flex-1 p-4 rounded-xl border transition-all ${costProfile === 'HIGH_PERFORMANCE'
-                                                    ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                                                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center space-x-2">
-                                                    <span className="material-icons">speed</span>
-                                                    <span className="font-bold">High Performance</span>
-                                                </div>
-                                                <p className="text-xs mt-1 opacity-70">Optimize for speed & reliability</p>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                        <button
-                                            onClick={handleProceedToCostEstimation}
-                                            disabled={isProcessing}
-                                            className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all disabled:opacity-50"
-                                        >
-                                            <span>Proceed to Cost Estimation</span>
-                                            <span className="material-icons">arrow_forward</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ====== STEP 3: COST ESTIMATION ====== */}
-                        {step === 'cost_estimation' && costEstimation && (
                             <div className="space-y-8 animate-fade-in">
-                                {/* Header */}
-                                <div className="text-center pb-6 border-b border-white/5">
-                                    <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full bg-primary/10 text-primary mb-4">
-                                        <span className="material-icons text-sm">paid</span>
-                                        <span className="text-sm font-bold uppercase tracking-wider">Cost Analysis</span>
-                                    </div>
-                                    <h2 className="text-3xl font-bold text-white">Cloud Comparison</h2>
-                                    <p className="text-gray-400 mt-2">
-                                        {costEstimation.scale_tier} tier • {costEstimation.deployment_type?.replace(/_/g, ' ')} deployment • {costEstimation.cost_profile === 'HIGH_PERFORMANCE' ? 'Performance optimized' : 'Cost optimized'}
-                                    </p>
-                                </div>
 
-                                {/* Provider Rankings */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {costEstimation.rankings?.map((provider, index) => (
-                                        <div
-                                            key={provider.provider}
-                                            className={`relative rounded-2xl border p-6 transition-all ${provider.recommended
-                                                ? 'bg-gradient-to-br from-primary/20 to-purple-500/10 border-primary/50 scale-105'
-                                                : 'bg-[#0F0F0F] border-white/10 hover:border-white/20'
-                                                }`}
-                                        >
-                                            {provider.recommended && (
-                                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary rounded-full text-xs font-bold uppercase tracking-wider">
-                                                    Recommended
-                                                </div>
-                                            )}
-
-                                            <div className="text-center mt-2">
-                                                <h3 className="text-2xl font-bold text-white">{provider.provider}</h3>
-                                                {/* Cost Range instead of single number */}
-                                                <div className="mt-2">
-                                                    <div className="text-2xl font-bold text-primary">
-                                                        {provider.cost_range?.formatted || provider.formatted_cost}
-                                                    </div>
-                                                    {/* FIX 5: Confidence with explanation for low */}
-                                                    <div className="flex flex-col items-center mt-1">
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold ${provider.cost_range?.confidence === 'high' ? 'bg-green-500/20 text-green-400' :
-                                                            provider.cost_range?.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                                'bg-red-500/20 text-red-400'
-                                                            }`}>
-                                                            {provider.cost_range?.confidence || 'low'} confidence
-                                                        </span>
-                                                        {(provider.cost_range?.confidence === 'low' || !provider.cost_range?.confidence) && (
-                                                            <span className="text-[9px] text-gray-500 mt-1 max-w-[140px] text-center">
-                                                                Some assumptions were inferred
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <p className="text-sm text-gray-400 mt-2">{provider.service_count} services</p>
-                                            </div>
-
-                                            <div className="mt-6 space-y-3">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-sm text-gray-400">Overall Score</span>
-                                                    <span className="font-bold text-white">{provider.score}/100</span>
-                                                </div>
-                                                <div className="w-full bg-white/10 rounded-full h-2">
-                                                    <div
-                                                        className={`h-2 rounded-full ${provider.recommended ? 'bg-primary' : 'bg-gray-500'}`}
-                                                        style={{ width: `${provider.score}%` }}
-                                                    />
-                                                </div>
-                                                <div className="flex justify-between text-xs text-gray-500">
-                                                    <span>Cost: {provider.cost_score}</span>
-                                                    <span>Performance: {provider.performance_score}</span>
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                onClick={() => setSelectedOption(selectedOption === provider.provider ? null : provider.provider)}
-                                                className="w-full mt-4 py-2 text-sm text-gray-400 hover:text-white transition-colors flex items-center justify-center space-x-1"
-                                            >
-                                                <span>View Services</span>
-                                                <span className="material-icons text-sm">{selectedOption === provider.provider ? 'expand_less' : 'expand_more'}</span>
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Service Details (Expandable) */}
-                                {selectedOption && costEstimation.providers?.[selectedOption] && (
-                                    <div className="bg-[#0F0F0F] border border-white/10 rounded-2xl p-6 animate-fade-in">
-                                        <h3 className="text-lg font-bold text-white mb-4">{selectedOption} Services</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {costEstimation.providers[selectedOption].services?.map((service, idx) => (
-                                                <div key={idx} className="bg-white/5 rounded-xl p-4">
-                                                    <div className="flex justify-between items-start">
-                                                        <div>
-                                                            <span className="text-[10px] text-primary uppercase font-bold">{service.category}</span>
-                                                            <h4 className="text-white font-medium">{service.display_name}</h4>
-                                                        </div>
-                                                        <span className="text-green-400 font-bold">{service.cost?.formatted}</span>
-                                                    </div>
-                                                    <p className="text-xs text-gray-500 mt-2">{service.sizing}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* FIX 6: Service-Level Cost Breakdown Table */}
-                                {costEstimation.providers?.[costEstimation.recommended?.provider]?.services?.length > 0 && (
-                                    <div className="bg-[#0F0F0F] border border-white/10 rounded-2xl p-6">
-                                        <h3 className="text-lg font-bold text-white mb-4 flex items-center space-x-2">
-                                            <span className="material-icons text-primary">receipt_long</span>
-                                            <span>Service Cost Breakdown ({costEstimation.recommended?.provider})</span>
-                                        </h3>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="border-b border-white/10">
-                                                        <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Category</th>
-                                                        <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Service</th>
-                                                        <th className="text-right py-3 px-4 text-gray-400 text-sm font-medium">Monthly Cost</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {costEstimation.providers[costEstimation.recommended?.provider].services.map((svc, idx) => (
-                                                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5">
-                                                            <td className="py-3 px-4">
-                                                                <span className="text-[10px] px-2 py-0.5 rounded bg-primary/20 text-primary uppercase font-bold">
-                                                                    {svc.category}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                <span className="text-white font-medium">{svc.display_name}</span>
-                                                                <span className="text-gray-500 text-xs ml-2">({svc.sizing})</span>
-                                                            </td>
-                                                            <td className="py-3 px-4 text-right">
-                                                                <span className="text-green-400 font-bold">{svc.cost?.formatted || '$0/mo'}</span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot>
-                                                    <tr className="border-t border-white/20 bg-white/5">
-                                                        <td colSpan={2} className="py-3 px-4 text-right">
-                                                            <span className="text-gray-400 font-medium">Total Estimate</span>
-                                                        </td>
-                                                        <td className="py-3 px-4 text-right">
-                                                            <span className="text-xl text-green-400 font-bold">
-                                                                {costEstimation.recommended?.cost_range?.formatted || costEstimation.recommended?.formatted_cost}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Missing Components Warning (Future Cost Risks) */}
-                                {costEstimation.missing_components && costEstimation.missing_components.length > 0 && (
-                                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-6">
-                                        <div className="flex items-center space-x-2 mb-4">
-                                            <span className="material-icons text-yellow-400">warning</span>
-                                            <h3 className="text-lg font-bold text-yellow-400">Future Cost Considerations</h3>
-                                        </div>
-                                        <p className="text-gray-300 text-sm mb-4">
-                                            {costEstimation.future_cost_warning}
-                                        </p>
-                                        <div className="space-y-2">
-                                            {costEstimation.missing_components.map((comp, idx) => (
-                                                <div key={idx} className="flex items-center justify-between bg-black/30 rounded-lg p-3">
-                                                    <div className="flex items-center space-x-3">
-                                                        <span className={`w-2 h-2 rounded-full ${comp.impact === 'high' ? 'bg-red-400' :
-                                                            comp.impact === 'medium' ? 'bg-yellow-400' : 'bg-blue-400'
-                                                            }`}></span>
-                                                        <span className="text-white font-medium">{comp.name}</span>
-                                                    </div>
-                                                    <span className="text-sm text-gray-400">{comp.estimated_additional_cost}/mo</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* AI Explanation */}
-                                {costEstimation.explanation && (
-                                    <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/10 rounded-2xl p-6">
-                                        <div className="flex items-center space-x-2 mb-4">
-                                            <span className="material-icons text-blue-400">auto_awesome</span>
-                                            <h3 className="text-lg font-bold text-white">AI Insights</h3>
-                                        </div>
-                                        <p className="text-gray-300 leading-relaxed">{costEstimation.explanation.recommendation_reason}</p>
-
-                                        {costEstimation.explanation.tradeoffs && (
-                                            <div className="mt-4 pt-4 border-t border-white/10">
-                                                <h4 className="text-sm font-bold text-gray-400 uppercase mb-2">Tradeoffs</h4>
-                                                <p className="text-sm text-gray-400">{costEstimation.explanation.tradeoffs}</p>
-                                            </div>
-                                        )}
-
-                                        {costEstimation.explanation.cost_optimization_tips && (
-                                            <div className="mt-4 pt-4 border-t border-white/10">
-                                                <h4 className="text-sm font-bold text-gray-400 uppercase mb-2">Cost Optimization Tips</h4>
-                                                <ul className="space-y-1">
-                                                    {costEstimation.explanation.cost_optimization_tips.map((tip, idx) => (
-                                                        <li key={idx} className="text-sm text-gray-400 flex items-start space-x-2">
-                                                            <span className="material-icons text-green-400 text-sm mt-0.5">check_circle</span>
-                                                            <span>{tip}</span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-
-                                        {costEstimation.explanation.future_considerations && (
-                                            <div className="mt-4 pt-4 border-t border-white/10">
-                                                <h4 className="text-sm font-bold text-gray-400 uppercase mb-2">Looking Ahead</h4>
-                                                <p className="text-sm text-gray-400 italic">{costEstimation.explanation.future_considerations}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Continue Button */}
-                                <div className="pt-8 border-t border-white/5 flex justify-between items-center">
+                                {/* SECTION 1: PROJECT SNAPSHOT */}
+                                <div className="bg-surface border border-border rounded-2xl p-6 shadow-lg relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[60px] -mr-10 -mt-10"></div>
                                     <button
-                                        onClick={() => setStep('review_spec')}
-                                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                        onClick={() => navigate(`/workspace/${workspaceId}/settings`)}
+                                        className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors rounded-lg p-2 hover:bg-white/5"
                                     >
-                                        <span className="material-icons">arrow_back</span>
-                                        <span>Back to Spec</span>
+                                        <span className="material-icons text-sm">settings</span>
                                     </button>
+
+                                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Project Snapshot</h3>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
+                                        <div className="md:col-span-2">
+                                            <div className="text-xs text-gray-500 mb-1">Project Name</div>
+                                            <div className="text-xl font-bold text-white tracking-tight flex items-center space-x-2 group">
+                                                <span>{projectData?.name || infraSpec.project_name || 'My Cloud Project'}</span>
+                                            </div>
+
+                                            {/* Description Display */}
+                                            <div className="mt-2 group">
+                                                <div className="text-xs text-gray-500 mb-1">Description</div>
+                                                <p className="text-sm text-gray-400 line-clamp-2" title={projectData?.description}>
+                                                    {projectData?.description || infraSpec.project_summary || description || "No description provided."}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-gray-500 mb-1">Project Type</div>
+                                            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/5 rounded-full text-sm text-gray-300 border border-white/5">
+                                                <span className="material-icons text-xs">category</span>
+                                                <span className="capitalize">{infraSpec.architecture_pattern?.replace(/_/g, ' ') || 'Web App'}</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-gray-500 mb-1">Client Type</div>
+                                            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/5 rounded-full text-sm text-gray-300 border border-white/5">
+                                                <span className="material-icons text-xs">devices</span>
+                                                <span className="capitalize">{aiSnapshot?.intent?.client_type || 'Web'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Features Badges */}
+                                    <div className="mt-6 pt-4 border-t border-white/5">
+                                        <div className="flex flex-wrap gap-2">
+                                            {aiSnapshot?.features && Object.entries(aiSnapshot.features).filter(([_, v]) => v === true).map(([key]) => (
+                                                <span key={key} className="px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded text-[10px] font-bold uppercase tracking-wider">
+                                                    {key.replace(/_/g, ' ')}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SECTION 2: HOW WE UNDERSTOOD YOUR PROJECT (Understanding) */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center space-x-2">
+                                        <span className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 text-xs font-bold">✓</span>
+                                        <h3 className="text-lg font-bold text-white">How we understood your project</h3>
+                                    </div>
+
+                                    <div className="bg-surface/50 border border-border rounded-2xl p-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {infraSpec.explanations?.slice(0, 4).map((exp, idx) => (
+                                                <div key={idx} className="flex items-start space-x-3">
+                                                    <span className="material-icons text-gray-500 text-sm mt-0.5">check</span>
+                                                    <span className="text-sm text-gray-300 leading-relaxed">{exp}</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex items-start space-x-3">
+                                                <span className="material-icons text-gray-500 text-sm mt-0.5">check</span>
+                                                <span className="text-sm text-gray-300 leading-relaxed">
+                                                    Traffic scale assumption: <span className="text-white font-medium">{infraSpec.assumptions?.traffic_tier || 'Medium'}</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-4 italic">Based on your description and selected options.</p>
+                                    </div>
+                                </div>
+
+                                {/* SECTION 3: ARCHITECTURE OVERVIEW (Service List) */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center space-x-2">
+                                        <span className="material-icons text-primary">schema</span>
+                                        <h3 className="text-lg font-bold text-white">Architecture Overview</h3>
+                                    </div>
+
+                                    <div className="bg-surface border border-border rounded-2xl p-6 relative overflow-hidden group hover:border-primary/30 transition-all duration-500">
+
+                                        {/* AI Project Summary (Concise) */}
+                                        <p className="text-white font-medium text-lg leading-relaxed border-b border-white/5 pb-4 mb-6">
+                                            "{infraSpec.project_summary || 'Optimized cloud infrastructure.'}"
+                                        </p>
+
+                                        {/* Service List Grid */}
+                                        <div className="mb-6">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Included Services & Infrastructure</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {infraSpec.modules?.map((mod, idx) => (
+                                                    <div key={idx} className="flex items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/20 transition-colors">
+                                                        <span className="material-icons text-gray-500 text-sm mr-3">
+                                                            {mod.category === 'compute' ? 'memory' :
+                                                                mod.category === 'storage' ? 'storage' :
+                                                                    mod.category === 'database' ? 'database' : 'cloud'}
+                                                        </span>
+                                                        <div className="flex-1">
+                                                            <div className="text-sm font-bold text-white">{mod.service_name || mod.type}</div>
+                                                            <div className="text-xs text-primary/80 uppercase font-bold tracking-wider">{mod.category}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-start space-x-2 bg-blue-500/5 p-4 rounded-xl border border-blue-500/10">
+                                            <span className="material-icons text-blue-400 text-sm mt-0.5">info</span>
+                                            <p className="text-xs text-gray-400">
+                                                This architecture is designed for <strong>{infraSpec.assumptions?.traffic_tier}</strong> traffic.
+                                                Proceed to usage estimation to see detailed costs.
+                                            </p>
+                                        </div>
+
+                                    </div>
+                                </div>
+
+                                {/* Next Action */}
+                                <div className="flex justify-end pt-4">
                                     <button
-                                        onClick={() => {
-                                            toast.success(`Selected ${costEstimation.recommended?.provider} as cloud provider!`);
-                                            // Store the selected provider for next steps
-                                            setStep('deployment_ready');
-                                        }}
-                                        className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all"
+                                        onClick={handleAnalyzeUsage}
+                                        disabled={isProcessing}
+                                        className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
                                     >
-                                        <span>Continue with {costEstimation.recommended?.provider}</span>
-                                        <span className="material-icons">arrow_forward</span>
+                                        <span>Estimate Usage & Costs</span>
+                                        <span className="material-icons">analytics</span>
                                     </button>
                                 </div>
                             </div>
                         )}
 
-                        {/* Processing Cost State */}
-                        {step === 'processing_cost' && (
+                        {/* STEP: PROCESSING USAGE */}
+                        {step === 'processing_usage' && (
                             <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 animate-fade-in">
                                 <div className="relative">
                                     <div className="w-20 h-20 rounded-full border-4 border-primary/20"></div>
                                     <div className="absolute inset-0 w-20 h-20 rounded-full border-4 border-transparent border-t-primary animate-spin"></div>
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-xl font-semibold text-white">Analyzing Cloud Costs</p>
-                                    <p className="text-gray-400 mt-2">Comparing AWS, GCP, and Azure pricing...</p>
+                                    <p className="text-xl font-semibold text-white">Analyzing Usage Patterns</p>
+                                    <p className="text-gray-400 mt-2">AI is predicting realistic user traffic, storage, and bandwidth...</p>
                                 </div>
                             </div>
                         )}
 
-                        {/* Deployment Ready Step */}
-                        {step === 'deployment_ready' && (
-                            <div className="flex flex-col items-center justify-center min-h-[400px] space-y-8 animate-fade-in">
-                                <div className="text-center">
-                                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/20 mb-6">
-                                        <span className="material-icons text-4xl text-green-400">check_circle</span>
-                                    </div>
-                                    <h2 className="text-3xl font-bold text-white">Ready for Deployment</h2>
-                                    <p className="text-gray-400 mt-3 max-w-md">
-                                        Your infrastructure specification is complete.
-                                        Selected provider: <span className="text-primary font-bold">{costEstimation?.recommended?.provider}</span>
+                        {/* STEP: USAGE REVIEW (The Missing Link) */}
+                        {step === 'usage_review' && usageProfile && (
+                            <div className="space-y-8 animate-fade-in pb-20 max-w-4xl mx-auto">
+                                <div className="text-center space-y-4 mb-8">
+                                    <h2 className="text-3xl font-bold text-white">Estimated Usage Profile</h2>
+                                    <p className="text-gray-400 max-w-2xl mx-auto">
+                                        Based on your project description ("{projectData?.name}"), we've inferred the following usage patterns to generate accurate costs.
                                     </p>
                                 </div>
 
-                                <div className="bg-[#0F0F0F] border border-white/10 rounded-2xl p-6 max-w-lg w-full">
-                                    <h3 className="text-lg font-bold text-white mb-4">Summary</h3>
-                                    <div className="space-y-3">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-400">Cloud Provider</span>
-                                            <span className="text-white font-medium">{costEstimation?.recommended?.provider}</span>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {/* Monthly Users */}
+                                    <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col hover:border-primary/50 transition-all group relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-3">
+                                            <span className="material-icons text-primary/20 group-hover:text-primary/40 transition-colors text-4xl">group</span>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-400">Monthly Estimate</span>
-                                            <span className="text-green-400 font-bold">{costEstimation?.recommended?.formatted_cost}</span>
+                                        <h3 className="text-gray-400 text-xs uppercase font-bold tracking-widest mb-4">Scale: Monthly Users</h3>
+                                        <div className="flex items-center space-x-3 mb-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Min</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-primary outline-none transition-colors"
+                                                    value={usageProfile.usage_profile.monthly_users.min}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, monthly_users: { ...usageProfile.usage_profile.monthly_users, min: val } } });
+                                                        setIsUsageUserModified(true);
+                                                    }}
+                                                />
+                                            </div>
+                                            <span className="text-gray-600 self-end mb-2">to</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Max</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-primary outline-none transition-colors"
+                                                    value={usageProfile.usage_profile.monthly_users.max}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, monthly_users: { ...usageProfile.usage_profile.monthly_users, max: val } } });
+                                                        setIsUsageUserModified(true);
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-400">Services</span>
-                                            <span className="text-white font-medium">{costEstimation?.recommended?.service_count} services</span>
+                                        <div className="space-y-2 mt-auto">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                                <span className="text-[10px] text-green-400 font-bold uppercase tracking-wider">Expected Traffic</span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-400 italic leading-relaxed">
+                                                "{usageProfile.rationale?.monthly_users || "Based on typical growth for this workload type."}"
+                                            </p>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-400">Cost Profile</span>
-                                            <span className="text-white font-medium capitalize">{costEstimation?.cost_profile?.replace('_', ' ').toLowerCase()}</span>
+                                    </div>
+
+                                    {/* Data Transfer */}
+                                    <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col hover:border-blue-500/50 transition-all group relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-3">
+                                            <span className="material-icons text-blue-500/20 group-hover:text-blue-500/40 transition-colors text-4xl">swap_horiz</span>
+                                        </div>
+                                        <h3 className="text-gray-400 text-xs uppercase font-bold tracking-widest mb-4">Network: Data Transfer (GB)</h3>
+                                        <div className="flex items-center space-x-3 mb-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Min</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-blue-500 outline-none transition-colors"
+                                                    value={usageProfile.usage_profile.data_transfer_gb.min}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, data_transfer_gb: { ...usageProfile.usage_profile.data_transfer_gb, min: val } } });
+                                                        setIsUsageUserModified(true);
+                                                    }}
+                                                />
+                                            </div>
+                                            <span className="text-gray-600 self-end mb-2">to</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Max</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-blue-500 outline-none transition-colors"
+                                                    value={usageProfile.usage_profile.data_transfer_gb.max}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, data_transfer_gb: { ...usageProfile.usage_profile.data_transfer_gb, max: val } } });
+                                                        setIsUsageUserModified(true);
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 mt-auto">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                                <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Egress/Bandwidth</span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-400 italic leading-relaxed">
+                                                "{usageProfile.rationale?.data_transfer_gb || "Simulates content delivery and API interactions."}"
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Storage */}
+                                    <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col hover:border-purple-500/50 transition-all group relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-3">
+                                            <span className="material-icons text-purple-500/20 group-hover:text-purple-500/40 transition-colors text-4xl">storage</span>
+                                        </div>
+                                        <h3 className="text-gray-400 text-xs uppercase font-bold tracking-widest mb-4">Capacity: Storage (GB)</h3>
+                                        <div className="flex items-center space-x-3 mb-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Min</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-purple-500 outline-none transition-colors"
+                                                    value={usageProfile.usage_profile.data_storage_gb.min}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setUsageProfile(prev => ({ ...prev, usage_profile: { ...prev.usage_profile, data_storage_gb: { ...prev.usage_profile.data_storage_gb, min: val } } }));
+                                                        setIsUsageUserModified(true);
+                                                    }}
+                                                />
+                                            </div>
+                                            <span className="text-gray-600 self-end mb-2">to</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Max</span>
+                                                <input
+                                                    type="number"
+                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-purple-500 outline-none transition-colors"
+                                                    value={usageProfile.usage_profile.data_storage_gb.max}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setUsageProfile(prev => ({ ...prev, usage_profile: { ...prev.usage_profile, data_storage_gb: { ...prev.usage_profile.data_storage_gb, max: val } } }));
+                                                        setIsUsageUserModified(true);
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 mt-auto">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                                <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">Data Footprint</span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-400 italic leading-relaxed">
+                                                "{usageProfile.rationale?.data_storage_gb || usageProfile.rationale?.storage_gb || "Accounts for both database and file assets."}"
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex space-x-4">
+                                <div className="flex justify-between items-center pt-8 border-t border-white/5">
                                     <button
-                                        onClick={() => setStep('cost_estimation')}
+                                        onClick={() => setStep('review_spec')} // Go back to architecture
                                         className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
                                     >
                                         <span className="material-icons">arrow_back</span>
-                                        <span>Back to Cost Analysis</span>
+                                        <span>Back to Architecture</span>
                                     </button>
                                     <button
-                                        disabled
-                                        className="px-8 py-4 bg-white/5 border border-white/10 rounded-xl text-gray-500 font-bold uppercase tracking-wider cursor-not-allowed flex items-center space-x-3"
+                                        onClick={handleProceedToCostEstimation}
+                                        disabled={isProcessing}
+                                        className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50"
                                     >
-                                        <span>Generate Terraform</span>
-                                        <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded ml-2">Coming Soon</span>
+                                        <span>Calculate Cloud Costs</span>
+                                        <span className="material-icons">payments</span>
                                     </button>
                                 </div>
                             </div>
                         )}
-                    </div>
-                </div>
-            </div>
-        </div>
+
+                        {/* STEP: COST ESTIMATION (Sections 4-8) */}
+                        {step === 'cost_estimation' && costEstimation && (
+                            <div className="space-y-8 animate-fade-in pb-20 max-w-5xl mx-auto">
+
+                                {/* SECTION 4: CLOUD COMPARISON & SELECTION */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="material-icons text-primary">cloud</span>
+                                            <h3 className="text-lg font-bold text-white">Cloud Provider Comparison</h3>
+                                        </div>
+                                        <div className="text-xs text-gray-500 italic">Select a provider to see specific details</div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {(costEstimation.rankings || []).map(rank => {
+                                            const isSelected = selectedProvider === rank.provider;
+
+                                            return (
+                                                <div
+                                                    key={rank.provider}
+                                                    onClick={() => setSelectedProvider(rank.provider)}
+                                                    className={`cursor-pointer rounded-2xl p-5 border transition-all relative overflow-hidden flex flex-col justify-between
+                                                        ${isSelected
+                                                            ? 'bg-primary/10 border-primary shadow-lg shadow-primary/20 scale-[1.02]'
+                                                            : 'bg-surface border-border hover:border-white/20'}`}
+                                                >
+                                                    {rank.recommended && (
+                                                        <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-r from-yellow-400 to-amber-500 text-[10px] font-bold text-black uppercase tracking-tighter rounded-bl-xl shadow-lg">
+                                                            Recommended
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex items-center space-x-3 mb-4">
+                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold
+                                                            ${rank.provider === 'AWS' ? 'bg-[#FF9900]/20 text-[#FF9900]' :
+                                                                rank.provider === 'GCP' ? 'bg-[#4285F4]/20 text-[#4285F4]' : 'bg-[#0078D4]/20 text-[#0078D4]'}`}>
+                                                            {rank.provider === 'AWS' ? 'AWS' : rank.provider === 'GCP' ? 'GCP' : 'AZ'}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-white">{rank.provider === 'AZURE' ? 'Azure' : rank.provider}</div>
+                                                            <div className="text-[10px] text-gray-400 uppercase tracking-widest">{rank.score}% Score</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1">
+                                                        <div className="text-xl font-bold text-white leading-tight">
+                                                            {rank.cost_range?.formatted || rank.formatted_cost}
+                                                            {(rank.monthly_cost && rank.monthly_cost < 1) && (
+                                                                <div className="text-[10px] text-amber-400">
+                                                                    {rank.cost_intent === 'hobby' ? 'Hobby-scale lower bound' : 'Estimated minimum'}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-500 uppercase">{rank.recommended ? 'Recommended configuration (Cost-Effective)' : 'Estimated Monthly Cost'}</div>
+                                                        {/* Show the cost profile used for this provider */}
+                                                        {(() => {
+                                                            // Try to find which profile was used for this provider
+                                                            let profileUsed = 'standard'; // default fallback
+                                                            
+                                                            if (costEstimation.scenarios) {
+                                                                // Check each profile to see if this provider has data
+                                                                for (const [profileName, providers] of Object.entries(costEstimation.scenarios)) {
+                                                                    if (providers[rank.provider]) {
+                                                                        profileUsed = profileName;
+                                                                        break;
+                                                                    }
+                                                                }
+                                                            }
+                                                            
+                                                            return (
+                                                                <div className="text-[10px] text-gray-400">
+                                                                    {profileUsed.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} profile
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                        {rank.recommended && costEstimation?.recommendation_facts && (
+                                                            <div className="text-[10px] text-amber-400 italic mt-1">
+                                                                {costEstimation.recommendation_facts.facts.dominant_drivers[0] 
+                                                                    ? `${costEstimation.recommendation_facts.facts.dominant_drivers[0].name} is a key cost driver at your usage level.`
+                                                                    : 'Based on your usage patterns and cost optimization.'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {isSelected && (
+                                                        <div className="mt-4 pt-3 border-t border-primary/20 flex items-center justify-between text-[10px] text-primary font-bold uppercase tracking-wider">
+                                                            <span>Selected</span>
+                                                            <span className="material-icons text-[12px]">check_circle</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* SECTION 5: COST ESTIMATE & CONFIDENCE */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center space-x-2">
+                                        <span className="material-icons text-green-400">paid</span>
+                                        <h3 className="text-lg font-bold text-white">Cost Details & Confidence</h3>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* Confidence Card */}
+                                        <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
+                                            <div className="relative w-24 h-24 mb-3">
+                                                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2E3645" strokeWidth="4" />
+                                                    <path
+                                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                                        fill="none"
+                                                        stroke={
+                                                            (typeof costEstimation.ai_explanation?.confidence_score === "number" && costEstimation.ai_explanation.confidence_score > 0.8) ? "#22c55e" :
+                                                                (typeof costEstimation.ai_explanation?.confidence_score === "number" && costEstimation.ai_explanation.confidence_score > 0.5) ? "#eab308" : "#ef4444"
+                                                        }
+                                                        strokeWidth="4"
+                                                        strokeDasharray={`${(costEstimation.ai_explanation?.confidence_score || 0) * 100}, 100`}
+                                                    />
+                                                </svg>
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                    <span className="text-xl font-bold text-white">
+                                                        {typeof costEstimation.ai_explanation?.confidence_score === "number" ? ((costEstimation.ai_explanation.confidence_score * 100).toFixed(0)) : "0"}%
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                                                <span>Confidence</span>
+                                                <div className="relative group">
+                                                    <span className="material-icons text-xs text-gray-400 cursor-help">info</span>
+                                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg w-64 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                        Confidence is based on identified services, multi-cloud comparison, and inferred usage. Final costs may vary after Terraform generation.
+                                                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <p className="text-xs text-gray-400 mt-2 line-clamp-2">
+                                                Based on identified services, multi-cloud comparison, and usage estimation. Final costs will be validated after infrastructure generation.
+                                            </p>
+                                        </div>
+                                        
+                                        {/* Score Card */}
+                                        <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
+                                            <div className="text-3xl font-bold text-white mb-3">
+                                                {(() => {
+                                                    // Find the selected provider's score from rankings
+                                                    const selectedRank = costEstimation.rankings?.find(rank => rank.provider === selectedProvider);
+                                                    // If not found in rankings, try to get from scenarios
+                                                    if (!selectedRank?.score) {
+                                                        const scenarioResult = costEstimation.scenarios 
+                                                            ? Object.values(costEstimation.scenarios)
+                                                                .map(profile => profile[selectedProvider])
+                                                                .find(result => result)
+                                                            : null;
+                                                        return scenarioResult?.score || costEstimation.recommended?.score || 'N/A';
+                                                    }
+                                                    return selectedRank.score;
+                                                })()}
+                                            </div>
+                                            <div className="text-sm font-bold text-white uppercase tracking-wider">% Score</div>
+                                            <p className="text-xs text-gray-400 mt-2">
+                                                {selectedProvider} competitiveness
+                                            </p>
+                                        </div>
+
+                                        {/* Basis Card */}
+                                        <div className="col-span-1 md:col-span-2 bg-surface border border-border rounded-2xl p-6">
+                                            <h4 className="text-xs text-gray-500 uppercase font-bold mb-4">Estimate Based On</h4>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div>
+                                                    <div className="text-2xl font-bold text-white">
+                                                        {usageProfile?.usage_profile?.monthly_users
+                                                            ? (typeof usageProfile.usage_profile.monthly_users === 'object' 
+                                                                ? `${(usageProfile.usage_profile.monthly_users.min || 0).toLocaleString()} - ${(usageProfile.usage_profile.monthly_users.max || 0).toLocaleString()}`
+                                                                : usageProfile.usage_profile.monthly_users.toLocaleString())
+                                                            : (costEstimation?.recommendation_facts?.facts?.usage?.monthly_users
+                                                                ? (typeof costEstimation.recommendation_facts.facts.usage.monthly_users === 'object'
+                                                                    ? `${(costEstimation.recommendation_facts.facts.usage.monthly_users.min || 0).toLocaleString()} - ${(costEstimation.recommendation_facts.facts.usage.monthly_users.max || 0).toLocaleString()}`
+                                                                    : costEstimation.recommendation_facts.facts.usage.monthly_users.toLocaleString())
+                                                                : '5,000')}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">Monthly Users</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-2xl font-bold text-white">
+                                                        {usageProfile?.usage_profile?.data_transfer_gb
+                                                            ? (typeof usageProfile.usage_profile.data_transfer_gb === 'object'
+                                                                ? `${usageProfile.usage_profile.data_transfer_gb.min || 0} - ${usageProfile.usage_profile.data_transfer_gb.max || 0} GB`
+                                                                : `${usageProfile.usage_profile.data_transfer_gb} GB`)
+                                                            : (costEstimation?.recommendation_facts?.facts?.usage?.data_transfer_gb
+                                                                ? (typeof costEstimation.recommendation_facts.facts.usage.data_transfer_gb === 'object'
+                                                                    ? `${costEstimation.recommendation_facts.facts.usage.data_transfer_gb.min || 0} - ${costEstimation.recommendation_facts.facts.usage.data_transfer_gb.max || 0} GB`
+                                                                    : `${costEstimation.recommendation_facts.facts.usage.data_transfer_gb} GB`)
+                                                                : '50 GB')}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">Data Transfer</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-2xl font-bold text-white">
+                                                        {usageProfile?.usage_profile?.data_storage_gb
+                                                            ? (typeof usageProfile.usage_profile.data_storage_gb === 'object'
+                                                                ? `${usageProfile.usage_profile.data_storage_gb.min || 0} - ${usageProfile.usage_profile.data_storage_gb.max || 0} GB`
+                                                                : `${usageProfile.usage_profile.data_storage_gb} GB`)
+                                                            : (costEstimation?.recommendation_facts?.facts?.usage?.data_storage_gb
+                                                                ? (typeof costEstimation.recommendation_facts.facts.usage.data_storage_gb === 'object'
+                                                                    ? `${costEstimation.recommendation_facts.facts.usage.data_storage_gb.min || 0} - ${costEstimation.recommendation_facts.facts.usage.data_storage_gb.max || 0} GB`
+                                                                    : `${costEstimation.recommendation_facts.facts.usage.data_storage_gb} GB`)
+                                                                : '10 GB')}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">Storage</div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-6 pt-4 border-t border-white/5">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {(() => {
+                                                        // Try to get services from recommended path first
+                                                        const recommendedServices = costEstimation.recommended?.provider === selectedProvider
+                                                            ? costEstimation.recommended.services
+                                                            : null;
+                                                                                            
+                                                        // Fallback to provider_details if recommended doesn't match or doesn't have services
+                                                        const services = recommendedServices || costEstimation.provider_details?.[selectedProvider]?.services || [];
+                                                                                            
+                                                        return services
+                                                            .slice(0, 6)
+                                                            .map((s, idx) => (
+                                                                <span key={idx} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-gray-300">
+                                                                    {s.cloud_service || s.display_name}
+                                                                </span>
+                                                            ));
+                                                    })()}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Recommendation Details */}
+                                            {costEstimation?.recommendation_facts && (
+                                                <div className="mt-4 pt-4 border-t border-amber-500/20">
+                                                    <div className="text-xs text-amber-400 font-bold uppercase tracking-wider mb-2">Why {costEstimation.recommendation_facts.provider.toUpperCase()}?</div>
+                                                    <div className="space-y-1 text-xs text-gray-300">
+                                                        {costEstimation.recommendation_facts.pros.map((pro, idx) => (
+                                                            <div key={idx} className="flex items-start">
+                                                                <span className="text-green-400 mr-1">•</span>
+                                                                <span>{pro}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={() => setStep('usage_review')}
+                                                className="mt-4 w-full py-2 text-gray-400 text-xs font-medium hover:text-white hover:bg-white/5 rounded-lg transition-colors flex items-center justify-center space-x-1"
+                                            >
+                                                <span className="material-icons text-xs">edit</span>
+                                                <span>Refine assumptions</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SECTION 6: WHAT DRIVES COST */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center space-x-2">
+                                        <span className="material-icons text-yellow-400">bolt</span>
+                                        <h3 className="text-lg font-bold text-white">What Drives Cost on {selectedProvider}</h3>
+                                    </div>
+
+                                    <div className="bg-surface border border-border rounded-2xl p-6">
+                                        <div className="space-y-4 mb-4">
+                                            {(() => {
+                                                // First try to get drivers from recommended path
+                                                const recommendedDrivers = costEstimation.recommended?.drivers || [];
+                                                
+                                                // Also try to get drivers from the selected provider in scenarios
+                                                const scenarioDrivers = costEstimation.scenarios 
+                                                    ? Object.values(costEstimation.scenarios)
+                                                        .map(profile => profile[selectedProvider])
+                                                        .filter(result => result)
+                                                        .map(result => result.drivers || [])
+                                                        .flat()
+                                                    : [];
+                                                
+                                                // Use recommended drivers if available for the selected provider, 
+                                                // otherwise use scenario drivers, then fallback to category breakdown
+                                                if (recommendedDrivers.length > 0 && costEstimation.recommended?.provider === selectedProvider) {
+                                                    // Show recommended drivers
+                                                    return recommendedDrivers
+                                                        .slice(0, 3)
+                                                        .map((driver, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between">
+                                                                <div>
+                                                                    <div className="text-white font-medium">{driver.name}</div>
+                                                                    <div className="text-xs text-gray-400">
+                                                                        {driver.value} | {driver.impact}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className="text-white font-bold">${driver.cost_contribution?.toFixed(2) || 'N/A'}</span>
+                                                                    <div className="text-xs text-gray-500">
+                                                                        Cost contribution
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ));
+                                                } else if (scenarioDrivers.length > 0) {
+                                                    // Show scenario drivers if available
+                                                    return scenarioDrivers
+                                                        .slice(0, 3)
+                                                        .map((driver, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between">
+                                                                <div>
+                                                                    <div className="text-white font-medium">{driver.name}</div>
+                                                                    <div className="text-xs text-gray-400">
+                                                                        {driver.value} | {driver.impact}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className="text-white font-bold">${driver.cost_contribution?.toFixed(2) || 'N/A'}</span>
+                                                                    <div className="text-xs text-gray-500">
+                                                                        Cost contribution
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ));
+                                                } else {
+                                                    // Fallback to category breakdown
+                                                    const selectedDetail = costEstimation.provider_details?.[selectedProvider] || {};
+                                                    const breakdown = selectedDetail.category_breakdown || [];
+                                                    const items = Array.isArray(breakdown) ? breakdown : [];
+
+                                                    return items
+                                                        .sort((a, b) => b.total - a.total)
+                                                        .slice(0, 3)
+                                                        .map((item, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between">
+                                                                <div>
+                                                                    <div className="text-white font-medium capitalize">{item.category}</div>
+                                                                    <div className="text-xs text-gray-400">
+                                                                        {item.service_count} associated services
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className="text-white font-bold">${(item.total || 0).toFixed(2)}</span>
+                                                                    <div className="w-24 bg-white/5 h-1.5 rounded-full mt-1">
+                                                                        <div className="bg-yellow-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, (item.total / (selectedDetail.total_monthly_cost || 1)) * 100)}%` }}></div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ));
+                                                }
+                                            })()}
+                                        </div>
+                                        <div className="text-sm text-amber-200/90 italic border-t border-amber-500/20 pt-4">
+                                            Increasing concurrency and data transfer pushes cost toward the upper range.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SECTION 7: SCENARIOS */}
+                                <div className="border border-white/5 rounded-2xl overflow-hidden">
+                                    <button
+                                        onClick={() => setSelectedOption(selectedOption === 'scenarios' ? null : 'scenarios')}
+                                        className="w-full p-4 bg-white/5 hover:bg-white/10 flex items-center justify-between transition-colors"
+                                    >
+                                        <span className="font-medium text-gray-300">Scaling Scenarios</span>
+                                        <span className={`material-icons text-gray-400 transition-transform ${selectedOption === 'scenarios' ? 'rotate-180' : ''}`}>expand_more</span>
+                                    </button>
+
+                                    {selectedOption === 'scenarios' && (
+                                        <div className="p-6 bg-surface animate-fade-in">
+                                            <div className="mb-6">
+                                                <h4 className="text-md font-bold text-white mb-3">Scenario Profiles</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl p-4">
+                                                        <div className="flex items-center space-x-2 mb-2">
+                                                            <span className="text-green-400">🟢</span>
+                                                            <h5 className="font-bold text-white">Cost-Effective (Recommended)</h5>
+                                                        </div>
+                                                        <p className="text-xs text-gray-400">Optimized for minimal costs with basic resources and serverless patterns.</p>
+                                                    </div>
+                                                    <div className="bg-gradient-to-br from-yellow-500/10 to-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                                                        <div className="flex items-center space-x-2 mb-2">
+                                                            <span className="text-amber-400">🟡</span>
+                                                            <h5 className="font-bold text-white">Standard</h5>
+                                                        </div>
+                                                        <p className="text-xs text-gray-400">Balanced configuration with moderate performance and availability.</p>
+                                                    </div>
+                                                    <div className="bg-gradient-to-br from-red-500/10 to-rose-500/10 border border-rose-500/20 rounded-xl p-4">
+                                                        <div className="flex items-center space-x-2 mb-2">
+                                                            <span className="text-rose-400">🔴</span>
+                                                            <h5 className="font-bold text-white">High-Performance</h5>
+                                                        </div>
+                                                        <p className="text-xs text-gray-400">Premium resources with enhanced performance and high availability.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <h4 className="text-sm font-bold text-white">If traffic doubles?</h4>
+                                                        <span className="text-[10px] font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded uppercase">+25%</span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-400">Cost scales with bandwidth and API requests.</p>
+                                                </div>
+                                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <h4 className="text-sm font-bold text-white">If storage doubles?</h4>
+                                                        <span className="text-[10px] font-bold text-green-400 bg-green-400/10 px-2 py-0.5 rounded uppercase">+5%</span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-400">Storage is generally the most cost-effective component.</p>
+                                                </div>
+                                            </div>
+                                            <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-4">
+                                                <div className="text-lg font-bold text-white mb-1">
+                                                    Estimated Cost Range
+                                                </div>
+                                                <div className="text-2xl font-bold text-white mb-2">
+                                                    {costEstimation.cost_range?.formatted || '$0.00 - $0.00/month'}
+                                                </div>
+                                                <p className="text-sm text-gray-300">
+                                                    Depends on scaling, availability, and performance choices
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* SECTION 8: DISCLAIMERS */}
+                                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start space-x-3">
+                                    <span className="material-icons text-amber-400 text-sm mt-0.5">warning</span>
+                                    <p className="text-xs text-amber-200/90 leading-relaxed">
+                                        This is an approximate cost estimate based on formula-driven provider pricing for {selectedProvider}. Exact costs will be calculated when Terraform is generated and will depend on actual resource usage, region selection, and any enterprise discounts.
+                                    </p>
+                                </div>
+
+                                {/* Final Action */}
+                                <div className="flex justify-between items-center pt-8 border-t border-white/5">
+                                    <button
+                                        onClick={() => setStep('usage_review')}
+                                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                    >
+                                        <span className="material-icons">arrow_back</span>
+                                        <span>Back to Usage</span>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setStep('architecture');
+                                        }}
+                                        className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
+                                    >
+                                        <span>Review Architecture</span>
+                                        <span className="material-icons">design_services</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* STEP 4: REQUIREMENTS CAPTURE */}
+                        {step === 'requirements' && (
+                            <RequirementsStep
+                                workspaceId={id}
+                                infraSpec={infraSpec}
+                                costEstimation={costEstimation}
+                                onNext={() => setStep('architecture')}
+                                onBack={() => setStep('cost_estimation')}
+                                onRequirementsCaptured={setRequirementsData}
+                            />
+                        )}
+
+                        {/* STEP 5: ARCHITECTURE DIAGRAM (Design Confirmation) */}
+                        {step === 'architecture' && (
+                            <ArchitectureStep
+                                workspaceId={id}
+                                infraSpec={infraSpec}
+                                costEstimation={costEstimation}
+                                selectedProvider={selectedProvider}
+                                selectedProfile={costProfile}
+                                usageProfile={usageProfile}
+                                requirementsData={requirementsData}
+                                architectureData={architectureData}
+                                onArchitectureDataLoaded={setArchitectureData}
+                                onNext={() => setStep('feedback')}
+                                onBack={() => setStep('requirements')}
+                            />
+                        )}
+
+                        {/* STEP 5: FEEDBACK (Pre-Terraform) */}
+                        {step === 'feedback' && (
+                            <FeedbackStep
+                                workspaceId={id}
+                                costEstimation={costEstimation}
+                                selectedProvider={selectedProvider}
+                                costIntent={usageProfile?.intent}
+                                onFeedbackSubmitted={() => setFeedbackSubmitted(true)}
+                                onNext={() => setStep('terraform_view')}
+                                onBack={() => setStep('architecture')}
+                            />
+                        )}
+
+                        {/* STEP 5: TERRAFORM VIEW */}
+                        {step === 'terraform_view' && (
+                            <TerraformStep
+                                workspaceId={id}
+                                infraSpec={infraSpec}
+                                selectedProvider={selectedProvider}
+                                costEstimation={costEstimation}
+                                onComplete={() => setStep('deployment_ready')}
+                                onBack={() => setStep('feedback')}
+                            />
+                        )}
+
+                        {/* Processing Cost State */}
+                        {
+                            step === 'processing_cost' && (
+                                <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 animate-fade-in">
+                                    <div className="relative">
+                                        <div className="w-20 h-20 rounded-full border-4 border-primary/20"></div>
+                                        <div className="absolute inset-0 w-20 h-20 rounded-full border-4 border-transparent border-t-primary animate-spin"></div>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-xl font-semibold text-white">Analyzing Cloud Costs</p>
+                                        <p className="text-gray-400 mt-2">Comparing AWS, GCP, and Azure pricing...</p>
+                                    </div>
+                                </div>
+                            )
+                        }
+
+                        {/* Deployment Ready Step */}
+                        {
+                            step === 'deployment_ready' && (
+                                <div className="flex flex-col items-center justify-center min-h-[400px] space-y-8 animate-fade-in">
+                                    <div className="text-center">
+                                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/20 mb-6">
+                                            <span className="material-icons text-4xl text-green-400">check_circle</span>
+                                        </div>
+                                        <h2 className="text-3xl font-bold text-white">Ready for Deployment</h2>
+                                        <p className="text-gray-400 mt-3 max-w-md">
+                                            Your infrastructure specification is complete.
+                                            Selected provider: <span className="text-primary font-bold">{selectedProvider}</span>
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-surface border border-border rounded-2xl p-6 max-w-lg w-full">
+                                        <h3 className="text-lg font-bold text-white mb-4">Summary</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Cloud Provider</span>
+                                                <span className="text-white font-medium">{selectedProvider}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Monthly Estimate</span>
+                                                <span className="text-green-400 font-bold">{costEstimation.provider_details?.[selectedProvider]?.formatted_cost || costEstimation.provider_details?.[selectedProvider]?.cost_range?.formatted}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Services</span>
+                                                <span className="text-white font-medium">{costEstimation.provider_details?.[selectedProvider]?.service_count || 0} services</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Cost Profile</span>
+                                                <span className="text-white font-medium capitalize">{costEstimation?.cost_profile?.replace('_', ' ').toLowerCase()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex space-x-4">
+                                        <button
+                                            onClick={() => setStep('cost_estimation')}
+                                            className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                        >
+                                            <span className="material-icons">arrow_back</span>
+                                            <span>Back to Cost Analysis</span>
+                                        </button>
+                                        <button
+                                            disabled
+                                            className="px-8 py-4 bg-white/5 border border-white/10 rounded-xl text-gray-500 font-bold uppercase tracking-wider cursor-not-allowed flex items-center space-x-3"
+                                        >
+                                            <span>Generate Terraform</span>
+                                            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded ml-2">Coming Soon</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        }
+                    </div >
+                </div >
+            </div >
+        </div >
     );
 };
 

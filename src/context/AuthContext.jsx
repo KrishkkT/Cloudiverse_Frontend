@@ -61,6 +61,20 @@ const AuthProvider = ({ children }) => {
     return user;
   };
 
+  const updateProfile = async (userData) => {
+    try {
+      const res = await axios.put(`${import.meta.env.VITE_API_BASE_URL}/api/auth/profile`, userData);
+      setUser(prev => ({ ...prev, ...res.data }));
+      return { success: true, user: res.data };
+    } catch (error) {
+      console.error("Profile update failed:", error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to update profile'
+      };
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
@@ -73,7 +87,8 @@ const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
-    logout
+    logout,
+    updateProfile
   };
 
   return (
