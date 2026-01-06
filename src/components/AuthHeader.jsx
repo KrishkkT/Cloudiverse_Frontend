@@ -13,12 +13,13 @@ const AuthHeader = () => {
         <header className="fixed top-0 left-0 w-full h-[72px] px-6 z-50 flex items-center justify-between bg-white/50 dark:bg-black/20 backdrop-blur-md border-b border-white/10 dark:border-white/5 transition-all">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 group">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:shadow-blue-500/30 transition-all">
-                    <span className="material-symbols-outlined text-[24px]">cloud_circle</span>
+                <div className="flex items-center">
+                    <img
+                        src="/cloudiverse.png"
+                        alt="Cloudiverse Architect"
+                        className="h-12 w-auto"
+                    />
                 </div>
-                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">
-                    Cloudiverse
-                </span>
             </Link>
 
             {/* Navigation */}

@@ -21,6 +21,7 @@ const TerraformViewer = React.lazy(() => import('./pages/TerraformViewer'));
 const CostEstimation = React.lazy(() => import('./pages/CostEstimation'));
 const NewWorkspace = React.lazy(() => import('./pages/NewWorkspace'));
 const Profile = React.lazy(() => import('./pages/Profile'));
+const Settings = React.lazy(() => import('./pages/Settings'));
 const WorkspaceSettings = React.lazy(() => import('./pages/WorkspaceSettings'));
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
 const Docs = React.lazy(() => import('./pages/Docs'));
@@ -76,6 +77,7 @@ function App() {
             <Route path="/workspace/:id" element={<WorkspaceCanvas />} />
             <Route path="/workspace/:id/settings" element={<WorkspaceSettings />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/comparison/:projectId" element={
               <div style={{ display: 'flex', width: '100%' }}>
                 <Sidebar />

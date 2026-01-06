@@ -94,25 +94,48 @@ const WorkspaceSelector = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
           <div>
             <h1 className="text-4xl font-extrabold text-text-primary tracking-tight">
-              My <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-500">Workspaces</span>
+              Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-500">{user?.name || 'User'}</span>
             </h1>
             <p className="text-text-secondary mt-2 text-lg">Manage and organize your cloud infrastructure projects</p>
           </div>
-          <button
-            onClick={handleCreateNewWorkspace}
-            className="group px-6 py-3 bg-primary text-white rounded-xl font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2"
-          >
-            <PlusCircle className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-            <span>New Project</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/profile')}
+              className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
+            >
+              <User className="w-4 h-4" />
+              <span>Profile</span>
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Settings</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 hover:bg-red-500/20 transition-colors font-medium flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+            <button
+              onClick={handleCreateNewWorkspace}
+              className="group px-6 py-3 bg-primary text-white rounded-xl font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2"
+            >
+              <PlusCircle className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+              <span>New Project</span>
+            </button>
+          </div>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
           {[
             { label: 'Total Projects', value: workspaces.length, icon: LayoutGrid, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-            { label: 'Active Deployments', value: workspaces.filter(w => w.status === 'deployed').length, icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' },
-            { label: 'Draft Designs', value: workspaces.filter(w => w.status !== 'deployed').length, icon: FileCode2, color: 'text-purple-400', bg: 'bg-purple-400/10' }
+            { label: 'Active Deployments', value: workspaces.filter(w => w.step === 'deployed' || w.step === 'active_deployment').length, icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' },
+            { label: 'Draft Designs', value: workspaces.filter(w => w.step !== 'deployed' && w.step !== 'active_deployment').length, icon: FileCode2, color: 'text-purple-400', bg: 'bg-purple-400/10' }
           ].map((stat, idx) => (
             <div key={idx} className="bg-surface border border-border p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
               <div className="flex items-center justify-between">
@@ -141,16 +164,6 @@ const WorkspaceSelector = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
-              <div className="h-6 w-px bg-border mx-2"></div>
-              <button className="text-text-subtle hover:text-text-primary transition-colors p-1">
-                <div className="w-5 h-5 flex flex-col gap-0.5 justify-center">
-                  <span className="block w-4 h-0.5 bg-current rounded-full"></span>
-                  <span className="block w-3 h-0.5 bg-current rounded-full"></span>
-                  <span className="block w-2 h-0.5 bg-current rounded-full"></span>
-                </div>
-              </button>
-            </div>
           </div>
         </div>
 
@@ -192,10 +205,16 @@ const WorkspaceSelector = () => {
                       <LayoutGrid className="w-6 h-6 text-primary" />
                     </div>
                     <div className="flex items-center gap-2">
-                      {workspace.status === 'deployed' && (
+                      {(workspace.step === 'deployed' || workspace.step === 'active_deployment') && (
                         <span className="px-3 py-1 bg-green-500/10 text-green-400 text-xs font-bold rounded-full border border-green-500/20 shadow-sm flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                           LIVE
+                        </span>
+                      )}
+                      {workspace.step === 'ready_for_deployment' && (
+                        <span className="px-3 py-1 bg-amber-500/10 text-amber-400 text-xs font-bold rounded-full border border-amber-500/20 shadow-sm flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                          READY
                         </span>
                       )}
                       <button

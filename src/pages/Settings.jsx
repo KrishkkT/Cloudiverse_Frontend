@@ -1,421 +1,521 @@
-import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import {
-  User,
-  Bell,
-  Shield,
-  Palette,
-  Download,
-  Upload,
-  AlertTriangle,
-  Key,
-  Globe,
-  CreditCard
-} from 'lucide-react';
-import { toast } from 'react-toastify';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, FileText, Cloud, DollarSign, Brain, Code, Shield, Bell, Users, Archive } from 'lucide-react';
 
 const Settings = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('profile');
-  const [formData, setFormData] = useState({
-    name: 'Krish Thakker',
-    email: user?.email || '',
-    notifications: true,
-    newsletter: false,
-    twoFactor: false,
-    theme: 'dark',
-    language: 'en'
+  const navigate = useNavigate();
+  const [settings, setSettings] = useState({
+    // Project Settings
+    defaultEnvironment: 'dev',
+    allowMultiEnvironment: true,
+    
+    // Cloud & Deployment
+    preferredProvider: 'auto',
+    defaultCostProfile: 'cost_effective',
+    preferredRegion: 'us-east-1',
+    dataResidencyRequired: false,
+    
+    // Cost & Budget
+    monthlyBudgetLimit: '',
+    budgetAlertEnabled: true,
+    showHeuristicEstimate: true,
+    showInfracostEstimate: true,
+    
+    // Architecture & AI
+    useAIForIntent: true,
+    useAIForExplanations: true,
+    allowAIOptimizations: false,
+    preventServerlessForStateful: true,
+    enforceCompliance: true,
+    failOnIncomplete: true,
+    allowManualPatternOverride: false,
+    
+    // Terraform
+    terraformVersion: '1.0',
+    backendType: 'local',
+    stateEncryption: true,
+    enableInfracost: true,
+    currency: 'USD',
+    costBreakdownLevel: 'detailed',
+    
+    // Security
+    compliancePreset: 'none',
+    encryptionAtRest: true,
+    encryptionInTransit: true,
+    publicEndpointsAllowed: false,
+    
+    // Notifications
+    costThresholdAlerts: true,
+    architectureChangeAlerts: true,
+    deploymentAlerts: true
   });
 
-  const handleDeleteAccount = () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      toast.success('Account deleted successfully');
-      // In a real app, you would make an API call to delete the account
+  const handleToggle = (key) => {
+    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleChange = (key, value) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSave = () => {
+    // Save to localStorage or backend
+    localStorage.setItem('cloudiverse_settings', JSON.stringify(settings));
+    alert('Settings saved successfully!');
+  };
+
+  useEffect(() => {
+    // Load settings from localStorage
+    const saved = localStorage.getItem('cloudiverse_settings');
+    if (saved) {
+      setSettings(JSON.parse(saved));
     }
-  };
+  }, []);
 
-  const handleSaveChanges = () => {
-    toast.success('Settings saved successfully');
-    // In a real app, you would make an API call to save the settings
-  };
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const tabs = [
-    { id: 'profile', name: 'Profile', icon: User },
-    { id: 'security', name: 'Security', icon: Shield },
-    { id: 'notifications', name: 'Notifications', icon: Bell },
-    { id: 'appearance', name: 'Appearance', icon: Palette },
-    { id: 'billing', name: 'Billing', icon: CreditCard }
-  ];
+  const ToggleSwitch = ({ checked, onChange }) => (
+    <button
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        checked ? 'bg-primary' : 'bg-white/10'
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
 
   return (
-    <div className="space-y-8 fade-in">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
-        <p className="text-text-secondary mt-1">Manage your account preferences</p>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar Navigation */}
-        <div className="lg:w-64">
-          <div className="card">
-            <div className="card-body p-0">
-              <nav className="space-y-1">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 text-left ${activeTab === tab.id
-                          ? 'bg-primary/20 text-primary border-l-4 border-primary'
-                          : 'text-text-secondary hover:bg-surface'
-                        }`}
-                    >
-                      <Icon size={20} />
-                      <span>{tab.name}</span>
-                    </button>
-                  );
-                })}
-              </nav>
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate('/workspaces')}
+              className="mr-4 p-2 rounded-lg hover:bg-surface transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-text-primary" />
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-text-primary">Workspace Settings</h1>
+              <p className="text-text-secondary">Configure your workspace preferences</p>
             </div>
           </div>
+          <button
+            onClick={handleSave}
+            className="px-6 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-colors"
+          >
+            Save Changes
+          </button>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1">
-          {activeTab === 'profile' && (
-            <div className="space-y-6">
-              <div className="card">
-                <div className="card-header">
-                  <h2 className="text-xl font-bold">Profile Information</h2>
-                </div>
-                <div className="card-body">
-                  <div className="flex items-center space-x-6 mb-8">
-                    <div className="relative">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                        <User className="text-background" size={32} />
-                      </div>
-                      <button className="absolute bottom-0 right-0 bg-surface rounded-full p-2 border-2 border-background">
-                        <Upload size={16} />
-                      </button>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold">Profile Picture</h3>
-                      <p className="text-text-secondary text-sm">JPG, GIF or PNG. Max size of 5MB</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="form-group">
-                      <label className="form-label">Full Name</label>
-                      <input
-                        type="text"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        className="form-input"
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Email Address</label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        className="form-input"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  onClick={handleSaveChanges}
-                  className="btn btn-primary"
+        {/* Settings Sections */}
+        <div className="space-y-6">
+          
+          {/* 1. Project Settings */}
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="flex items-center mb-4">
+              <FileText className="h-5 w-5 text-primary mr-2" />
+              <h2 className="text-xl font-semibold text-text-primary">Project Settings</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">Default Environment</label>
+                <select
+                  value={settings.defaultEnvironment}
+                  onChange={(e) => handleChange('defaultEnvironment', e.target.value)}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
                 >
-                  Save Changes
-                </button>
+                  <option value="dev">Development</option>
+                  <option value="staging">Staging</option>
+                  <option value="prod">Production</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Allow Multi-Environment</p>
+                  <p className="text-text-secondary text-sm">Enable multiple environment support</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.allowMultiEnvironment}
+                  onChange={() => handleToggle('allowMultiEnvironment')}
+                />
               </div>
             </div>
-          )}
+          </div>
 
-          {activeTab === 'security' && (
-            <div className="space-y-6">
-              <div className="card">
-                <div className="card-header">
-                  <h2 className="text-xl font-bold">Security Settings</h2>
+          {/* 2. Cloud & Deployment */}
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="flex items-center mb-4">
+              <Cloud className="h-5 w-5 text-primary mr-2" />
+              <h2 className="text-xl font-semibold text-text-primary">Cloud & Deployment Preferences</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">Preferred Cloud Provider</label>
+                <select
+                  value={settings.preferredProvider}
+                  onChange={(e) => handleChange('preferredProvider', e.target.value)}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                >
+                  <option value="auto">Auto (Comparison-based)</option>
+                  <option value="aws">AWS</option>
+                  <option value="gcp">Google Cloud</option>
+                  <option value="azure">Azure</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">Preferred Region</label>
+                <select
+                  value={settings.preferredRegion}
+                  onChange={(e) => handleChange('preferredRegion', e.target.value)}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                >
+                  <option value="us-east-1">US East (N. Virginia)</option>
+                  <option value="us-west-2">US West (Oregon)</option>
+                  <option value="eu-west-1">EU (Ireland)</option>
+                  <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Data Residency Required</p>
+                  <p className="text-text-secondary text-sm">Enforce data to stay in selected region</p>
                 </div>
-                <div className="card-body space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 rounded-lg bg-amber-400/20">
-                        <Key className="text-amber-400" size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold">Password</h3>
-                        <p className="text-sm text-text-secondary">Last changed 3 months ago</p>
-                      </div>
-                    </div>
-                    <button className="btn btn-secondary">Change</button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 rounded-lg bg-primary/20">
-                        <Shield className="text-primary" size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold">Two-Factor Authentication</h3>
-                        <p className="text-sm text-text-secondary">Add extra security to your account</p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="twoFactor"
-                        checked={formData.twoFactor}
-                        onChange={handleChange}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-surface rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 rounded-lg bg-secondary/20">
-                        <Download className="text-secondary" size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold">Backup Codes</h3>
-                        <p className="text-sm text-text-secondary">Generate backup codes for 2FA</p>
-                      </div>
-                    </div>
-                    <button className="btn btn-secondary">Generate</button>
-                  </div>
-
-                  <div className="card bg-red-500/10 border border-red-500/30">
-                    <div className="card-body">
-                      <div className="flex items-start">
-                        <AlertTriangle className="text-red-500 mt-1 mr-3" size={20} />
-                        <div>
-                          <h3 className="font-bold text-red-500">Danger Zone</h3>
-                          <p className="text-text-secondary mt-1">Permanently delete your account and all associated data</p>
-                          <button
-                            onClick={handleDeleteAccount}
-                            className="btn btn-danger mt-4"
-                          >
-                            Delete Account
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ToggleSwitch 
+                  checked={settings.dataResidencyRequired}
+                  onChange={() => handleToggle('dataResidencyRequired')}
+                />
               </div>
             </div>
-          )}
+          </div>
 
-          {activeTab === 'notifications' && (
-            <div className="space-y-6">
-              <div className="card">
-                <div className="card-header">
-                  <h2 className="text-xl font-bold">Notification Preferences</h2>
+          {/* 3. Cost & Budget */}
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="flex items-center mb-4">
+              <DollarSign className="h-5 w-5 text-primary mr-2" />
+              <h2 className="text-xl font-semibold text-text-primary">Cost & Budget Controls</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">Monthly Budget Limit (USD)</label>
+                <input
+                  type="number"
+                  value={settings.monthlyBudgetLimit}
+                  onChange={(e) => handleChange('monthlyBudgetLimit', e.target.value)}
+                  placeholder="Leave empty for no limit"
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Budget Alert Enabled</p>
+                  <p className="text-text-secondary text-sm">Warn when approaching budget limit</p>
                 </div>
-                <div className="card-body space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                    <div>
-                      <h3 className="font-bold">Email Notifications</h3>
-                      <p className="text-sm text-text-secondary">Receive email updates about your projects</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="notifications"
-                        checked={formData.notifications}
-                        onChange={handleChange}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-surface rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                    <div>
-                      <h3 className="font-bold">Newsletter</h3>
-                      <p className="text-sm text-text-secondary">Subscribe to our monthly newsletter</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="newsletter"
-                        checked={formData.newsletter}
-                        onChange={handleChange}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-surface rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                    <div>
-                      <h3 className="font-bold">Security Alerts</h3>
-                      <p className="text-sm text-text-secondary">Get notified about security events</p>
-                    </div>
-                    <div className="badge badge-success">Always On</div>
-                  </div>
+                <ToggleSwitch 
+                  checked={settings.budgetAlertEnabled}
+                  onChange={() => handleToggle('budgetAlertEnabled')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Show Heuristic Estimate</p>
+                  <p className="text-text-secondary text-sm">Display formula-based cost estimates</p>
                 </div>
+                <ToggleSwitch 
+                  checked={settings.showHeuristicEstimate}
+                  onChange={() => handleToggle('showHeuristicEstimate')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Show Infracost Estimate</p>
+                  <p className="text-text-secondary text-sm">Display Terraform-based pricing</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.showInfracostEstimate}
+                  onChange={() => handleToggle('showInfracostEstimate')}
+                />
               </div>
             </div>
-          )}
+          </div>
 
-          {activeTab === 'appearance' && (
-            <div className="space-y-6">
-              <div className="card">
-                <div className="card-header">
-                  <h2 className="text-xl font-bold">Appearance</h2>
-                </div>
-                <div className="card-body">
-                  <div className="form-group">
-                    <label className="form-label">Theme</label>
-                    <select
-                      name="theme"
-                      value={formData.theme}
-                      onChange={handleChange}
-                      className="form-select"
-                    >
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                      <option value="system">System Default</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Language</label>
-                    <select
-                      name="language"
-                      value={formData.language}
-                      onChange={handleChange}
-                      className="form-select"
-                    >
-                      <option value="en">English</option>
-                      <option value="es">Spanish</option>
-                      <option value="fr">French</option>
-                      <option value="de">German</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
+          {/* 4. Architecture & AI */}
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="flex items-center mb-4">
+              <Brain className="h-5 w-5 text-primary mr-2" />
+              <h2 className="text-xl font-semibold text-text-primary">Architecture & AI Behavior</h2>
             </div>
-          )}
-
-          {activeTab === 'billing' && (
-            <div className="space-y-6">
-              <div className="card">
-                <div className="card-header">
-                  <h2 className="text-xl font-bold">Billing Information</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Use AI for Intent Understanding</p>
+                  <p className="text-text-secondary text-sm">Let AI analyze project requirements</p>
                 </div>
-                <div className="card-body">
-                  <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 rounded-lg bg-primary/20">
-                        <CreditCard className="text-primary" size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold">Payment Method</h3>
-                        <p className="text-sm text-text-secondary">Visa ending in 4242</p>
-                      </div>
-                    </div>
-                    <button className="btn btn-secondary">Update</button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                    <div className="form-group">
-                      <label className="form-label">Billing Email</label>
-                      <input
-                        type="email"
-                        name="billingEmail"
-                        placeholder="billing@example.com"
-                        className="form-input"
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Tax ID (Optional)</label>
-                      <input
-                        type="text"
-                        name="taxId"
-                        placeholder="e.g. EU123456789"
-                        className="form-input"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Address</label>
-                    <textarea
-                      name="address"
-                      placeholder="123 Main St, City, Country"
-                      className="form-textarea"
-                    ></textarea>
-                  </div>
-                </div>
+                <ToggleSwitch 
+                  checked={settings.useAIForIntent}
+                  onChange={() => handleToggle('useAIForIntent')}
+                />
               </div>
-
-              <div className="card">
-                <div className="card-header">
-                  <h2 className="text-xl font-bold">Plan & Usage</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Use AI for Explanations</p>
+                  <p className="text-text-secondary text-sm">Generate explanations for decisions</p>
                 </div>
-                <div className="card-body">
+                <ToggleSwitch 
+                  checked={settings.useAIForExplanations}
+                  onChange={() => handleToggle('useAIForExplanations')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Allow AI Optimizations</p>
+                  <p className="text-text-secondary text-sm">Let AI suggest architecture improvements</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.allowAIOptimizations}
+                  onChange={() => handleToggle('allowAIOptimizations')}
+                />
+              </div>
+              <div className="border-t border-border pt-4 mt-4">
+                <p className="text-sm font-semibold text-text-primary mb-3">Architecture Guardrails</p>
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold">Pro Plan</h3>
-                      <p className="text-text-secondary">$29/month</p>
+                      <p className="text-text-primary font-medium text-sm">Prevent Serverless for Stateful Apps</p>
+                      <p className="text-text-secondary text-xs">Block inappropriate patterns</p>
                     </div>
-                    <button className="btn btn-secondary">Manage Subscription</button>
+                    <ToggleSwitch 
+                      checked={settings.preventServerlessForStateful}
+                      onChange={() => handleToggle('preventServerlessForStateful')}
+                    />
                   </div>
-
-                  <div className="mt-6 space-y-4">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm text-text-secondary">Projects</span>
-                        <span className="text-sm">8/20</span>
-                      </div>
-                      <div className="w-full bg-surface rounded-full h-2">
-                        <div className="bg-primary h-2 rounded-full" style={{ width: '40%' }}></div>
-                      </div>
+                      <p className="text-text-primary font-medium text-sm">Enforce Compliance Constraints</p>
+                      <p className="text-text-secondary text-xs">Apply compliance rules strictly</p>
                     </div>
-
+                    <ToggleSwitch 
+                      checked={settings.enforceCompliance}
+                      onChange={() => handleToggle('enforceCompliance')}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
                     <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-sm text-text-secondary">Team Members</span>
-                        <span className="text-sm">3/5</span>
-                      </div>
-                      <div className="w-full bg-surface rounded-full h-2">
-                        <div className="bg-secondary h-2 rounded-full" style={{ width: '60%' }}></div>
-                      </div>
+                      <p className="text-text-primary font-medium text-sm">Fail on Incomplete Architecture</p>
+                      <p className="text-text-secondary text-xs">Don't proceed with missing services</p>
                     </div>
+                    <ToggleSwitch 
+                      checked={settings.failOnIncomplete}
+                      onChange={() => handleToggle('failOnIncomplete')}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-text-primary font-medium text-sm">Allow Manual Pattern Override</p>
+                      <p className="text-text-secondary text-xs">Let advanced users override pattern selection</p>
+                    </div>
+                    <ToggleSwitch 
+                      checked={settings.allowManualPatternOverride}
+                      onChange={() => handleToggle('allowManualPatternOverride')}
+                    />
                   </div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* 5. Terraform & Infrastructure */}
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="flex items-center mb-4">
+              <Code className="h-5 w-5 text-primary mr-2" />
+              <h2 className="text-xl font-semibold text-text-primary">Terraform & Infrastructure</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">Terraform Version</label>
+                <select
+                  value={settings.terraformVersion}
+                  onChange={(e) => handleChange('terraformVersion', e.target.value)}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                >
+                  <option value="1.0">1.0.x</option>
+                  <option value="1.5">1.5.x</option>
+                  <option value="latest">Latest</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">Backend Type</label>
+                <select
+                  value={settings.backendType}
+                  onChange={(e) => handleChange('backendType', e.target.value)}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                >
+                  <option value="local">Local</option>
+                  <option value="remote">Remote</option>
+                  <option value="s3">AWS S3</option>
+                  <option value="gcs">Google Cloud Storage</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">State File Encryption</p>
+                  <p className="text-text-secondary text-sm">Encrypt Terraform state files</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.stateEncryption}
+                  onChange={() => handleToggle('stateEncryption')}
+                />
+              </div>
+              <div className="border-t border-border pt-4 mt-4">
+                <p className="text-sm font-semibold text-text-primary mb-3">Infracost Integration</p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-text-primary font-medium text-sm">Enable Infracost Estimates</p>
+                      <p className="text-text-secondary text-xs">Get Terraform-based pricing</p>
+                    </div>
+                    <ToggleSwitch 
+                      checked={settings.enableInfracost}
+                      onChange={() => handleToggle('enableInfracost')}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-primary mb-2">Currency</label>
+                    <select
+                      value={settings.currency}
+                      onChange={(e) => handleChange('currency', e.target.value)}
+                      className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-primary mb-2">Cost Breakdown Level</label>
+                    <select
+                      value={settings.costBreakdownLevel}
+                      onChange={(e) => handleChange('costBreakdownLevel', e.target.value)}
+                      className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="simple">Simple</option>
+                      <option value="detailed">Detailed</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 6. Security & Compliance */}
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="flex items-center mb-4">
+              <Shield className="h-5 w-5 text-primary mr-2" />
+              <h2 className="text-xl font-semibold text-text-primary">Security & Compliance</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">Compliance Preset</label>
+                <select
+                  value={settings.compliancePreset}
+                  onChange={(e) => handleChange('compliancePreset', e.target.value)}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-text-primary focus:ring-2 focus:ring-primary"
+                >
+                  <option value="none">None</option>
+                  <option value="gdpr">GDPR</option>
+                  <option value="pci">PCI-DSS</option>
+                  <option value="hipaa">HIPAA (Coming Soon)</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Encryption at Rest</p>
+                  <p className="text-text-secondary text-sm">Encrypt stored data</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.encryptionAtRest}
+                  onChange={() => handleToggle('encryptionAtRest')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Encryption in Transit</p>
+                  <p className="text-text-secondary text-sm">Use TLS/SSL for data transfer</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.encryptionInTransit}
+                  onChange={() => handleToggle('encryptionInTransit')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Public Endpoints Allowed</p>
+                  <p className="text-text-secondary text-sm">Allow internet-facing services</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.publicEndpointsAllowed}
+                  onChange={() => handleToggle('publicEndpointsAllowed')}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 7. Notifications */}
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <div className="flex items-center mb-4">
+              <Bell className="h-5 w-5 text-primary mr-2" />
+              <h2 className="text-xl font-semibold text-text-primary">Notifications & Alerts</h2>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Cost Threshold Alerts</p>
+                  <p className="text-text-secondary text-sm">Notify when costs exceed limits</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.costThresholdAlerts}
+                  onChange={() => handleToggle('costThresholdAlerts')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Architecture Change Alerts</p>
+                  <p className="text-text-secondary text-sm">Notify on architecture modifications</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.architectureChangeAlerts}
+                  onChange={() => handleToggle('architectureChangeAlerts')}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-text-primary font-medium">Deployment Alerts</p>
+                  <p className="text-text-secondary text-sm">Notify on deployment success/failure</p>
+                </div>
+                <ToggleSwitch 
+                  checked={settings.deploymentAlerts}
+                  onChange={() => handleToggle('deploymentAlerts')}
+                />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Save Button (Bottom) */}
+        <div className="flex justify-end mt-8 pb-8">
+          <button
+            onClick={handleSave}
+            className="px-8 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+          >
+            Save All Settings
+          </button>
         </div>
       </div>
-
-      {/* AI Dock */}
-      <AIDock />
     </div>
   );
 };

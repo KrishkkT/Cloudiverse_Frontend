@@ -14,22 +14,56 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Enhanced validation
+    if (!name || name.trim().length < 2) {
+      toast.error('Please enter your full name (at least 2 characters)', { duration: 4000 });
+      return;
+    }
+    
+    if (!email || !email.trim()) {
+      toast.error('Please enter a valid email address', { duration: 4000 });
+      return;
+    }
+    
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error('Please enter a valid email format', { duration: 4000 });
+      return;
+    }
+    
     setLoading(true);
 
     if (password.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+      toast.error('Password must be at least 6 characters', { duration: 4000 });
       setLoading(false);
       return;
     }
 
     try {
       await register(name, email, password);
-      toast.success('Account created! Welcome to Cloudiverse.');
-      navigate('/workspaces');
+      toast.success('Account created successfully! Welcome to Cloudiverse.', { duration: 3000 });
+      setTimeout(() => navigate('/workspaces'), 1000);
     } catch (error) {
-      console.error(error);
-      const msg = error.response?.data?.message || 'Registration failed.';
-      toast.error(msg);
+      console.error('[REGISTER ERROR]', error);
+      
+      // Enhanced error messages
+      let msg = 'Registration failed. Please try again.';
+      
+      if (error.response?.status === 400) {
+        msg = error.response?.data?.message || 'Invalid registration data. Please check your input.';
+      } else if (error.response?.status === 409) {
+        msg = 'Email already registered. Please login or use a different email.';
+      } else if (error.response?.status === 500) {
+        msg = 'Server error during registration. Please try again later.';
+      } else if (!error.response) {
+        msg = 'Cannot connect to server. Check your internet connection.';
+      } else {
+        msg = error.response?.data?.message || error.response?.data?.msg || msg;
+      }
+      
+      toast.error(msg, { duration: 5000 });
     } finally {
       setLoading(false);
     }

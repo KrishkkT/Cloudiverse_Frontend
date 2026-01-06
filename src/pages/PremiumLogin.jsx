@@ -9,22 +9,50 @@ const PremiumLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Client-side validation
+    if (!email || !email.trim()) {
+      toast.error('Please enter your email address', { duration: 4000 });
+      return;
+    }
+    
+    if (!password || password.length < 6) {
+      toast.error('Password must be at least 6 characters', { duration: 4000 });
+      return;
+    }
+    
     setLoading(true);
 
     try {
       await login(email, password);
-      // Success is implied by redirect
-      navigate('/workspaces');
+      toast.success('Login successful! Redirecting...', { duration: 2000 });
+      setTimeout(() => navigate('/workspaces'), 500);
     } catch (error) {
-      console.error(error);
-      const msg = error.response?.data?.message || 'Login failed. Check your credentials.';
-      toast.error(msg);
+      console.error('[LOGIN ERROR]', error);
+      
+      // Enhanced error messages
+      let msg = 'Login failed. Please try again.';
+      
+      if (error.response?.status === 401) {
+        msg = 'Invalid email or password. Please check your credentials.';
+      } else if (error.response?.status === 404) {
+        msg = 'Account not found. Please sign up first.';
+      } else if (error.response?.status === 429) {
+        msg = 'Too many login attempts. Please try again later.';
+      } else if (error.response?.status === 500) {
+        msg = 'Server error. Please try again or contact support.';
+      } else if (!error.response) {
+        msg = 'Cannot connect to server. Check your internet connection.';
+      } else {
+        msg = error.response?.data?.message || error.response?.data?.msg || msg;
+      }
+      
+      toast.error(msg, { duration: 5000 });
     } finally {
       setLoading(false);
     }
@@ -83,11 +111,7 @@ const PremiumLogin = () => {
                 </button>
               </div>
 
-              <div className="flex justify-between items-center pt-1">
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="rounded border-gray-300 text-primary focus:ring-primary bg-gray-100 dark:bg-white/10" />
-                  <span className="text-sm font-medium text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-300 transition-colors">Remember me</span>
-                </label>
+              <div className="flex justify-end items-center pt-1">
                 <Link to="/forgot-password" className="text-sm font-bold text-primary hover:text-blue-600 transition-colors">
                   Forgot Password?
                 </Link>

@@ -32,6 +32,7 @@ const WorkspaceCanvas = () => {
     const [architectureData, setArchitectureData] = useState(null);
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [requirementsData, setRequirementsData] = useState(null);
+    const [isDeployed, setIsDeployed] = useState(false); // 🔥 Track deployment status
 
     // Polish-to-Production States
     const [isAssumptionsDrifted, setIsAssumptionsDrifted] = useState(false);
@@ -131,10 +132,32 @@ const WorkspaceCanvas = () => {
             }
 
         } catch (err) {
-            console.error("Cost Analysis Error:", err);
+            console.error('[COST ANALYSIS ERROR]', err);
             toast.dismiss('cost-analysis');
-            toast.error("Failed to analyze costs. Please try again.");
-            setStep('review_spec');
+            setStep('usage_review');
+            
+            // Enhanced error messages
+            let errMsg = "Failed to analyze costs.";
+            
+            if (err.response?.status === 400) {
+                errMsg = err.response?.data?.msg || "Invalid infrastructure data. Please review your architecture.";
+            } else if (err.response?.status === 401) {
+                errMsg = "Session expired. Please login again.";
+                setTimeout(() => navigate('/'), 1500);
+            } else if (err.response?.status === 500) {
+                errMsg = err.response?.data?.error || "Server error during cost calculation. Please try again.";
+            } else if (err.code === 'ECONNABORTED') {
+                errMsg = "Cost analysis timed out. Please try again.";
+            } else if (!err.response) {
+                errMsg = "Cannot reach cost analysis service. Check your connection.";
+            } else {
+                errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
+            }
+            
+            toast.error(errMsg, { 
+                duration: 6000,
+                icon: '⚠️'
+            });
         } finally {
             setIsProcessing(false);
         }
@@ -152,6 +175,13 @@ const WorkspaceCanvas = () => {
 
                 const res = await axios.get(`${API_BASE}/api/workspaces/${id}`, { headers });
                 const ws = res.data;
+                
+                // 🔥 Check if workspace is deployed
+                const deploymentStatus = ws.state_json?.deployment?.status || ws.step;
+                if (deploymentStatus === 'active' || ws.step === 'active_deployment') {
+                    setIsDeployed(true);
+                    console.log('[WORKSPACE] Deployed workspace - editing disabled');
+                }
 
                 setWorkspaceId(ws.id);
                 setProjectData({ id: ws.project_id, name: ws.name }); // Ensure projectId is set
@@ -183,6 +213,13 @@ const WorkspaceCanvas = () => {
                     }
                     if (savedState.costProfile) {
                         setCostProfile(savedState.costProfile);
+                    }
+                    // Restore selected provider
+                    if (savedState.selectedProvider) {
+                        setSelectedProvider(savedState.selectedProvider);
+                    } else if (savedState.costEstimation?.recommended?.provider) {
+                        // Fallback: extract from cost estimation
+                        setSelectedProvider(savedState.costEstimation.recommended.provider);
                     }
 
                     // Merge saved projectData (spec data) with structural data
@@ -275,15 +312,32 @@ const WorkspaceCanvas = () => {
             }, 1200);
 
         } catch (err) {
-            console.error(err);
+            console.error('[ANALYZE ERROR]', err);
             setIsProcessing(false);
             setStep('input');
-            const errMsg = err.response?.data?.msg || "Error analyzing request.";
+            
+            // Enhanced error messages
+            let errMsg = "Failed to analyze your request.";
+            
             if (err.response?.status === 401) {
-                toast.error("Session expired. Please login again.");
-                navigate('/');
+                errMsg = "Your session has expired. Please login again.";
+                toast.error(errMsg, { duration: 4000 });
+                setTimeout(() => navigate('/'), 1500);
+            } else if (err.response?.status === 400) {
+                errMsg = err.response?.data?.msg || err.response?.data?.error || "Invalid request. Please check your input.";
+                toast.error(errMsg, { duration: 5000 });
+            } else if (err.response?.status === 500) {
+                errMsg = "Server error occurred. Please try again or contact support.";
+                toast.error(errMsg, { duration: 5000 });
+            } else if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+                errMsg = "Request timeout. Please check your connection and try again.";
+                toast.error(errMsg, { duration: 5000 });
+            } else if (!err.response) {
+                errMsg = "Cannot connect to server. Please check your internet connection.";
+                toast.error(errMsg, { duration: 5000 });
             } else {
-                toast.error(errMsg);
+                errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
+                toast.error(errMsg, { duration: 5000 });
             }
         }
     };
@@ -298,9 +352,12 @@ const WorkspaceCanvas = () => {
         try {
             const token = localStorage.getItem('token');
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            
+            // 🔥 FIX: Ensure description exists (fallback to stored description or workspace name)
+            const finalDescription = description || projectData?.name || "User confirmed intent";
 
             const res = await axios.post(`${API_BASE}/api/workflow/analyze`, {
-                userInput: description,
+                userInput: finalDescription,
                 conversationHistory: history,
                 input_type: 'CONFIRMATION', // Tell backend user confirmed the intent
                 approvedIntent: approvedAnalysis // Send back the logic gate approval
@@ -322,9 +379,27 @@ const WorkspaceCanvas = () => {
                 }
             }, 1000);
         } catch (err) {
-            console.error("Confirmation Error", err);
+            console.error('[CONFIRMATION ERROR]', err);
             setIsProcessing(false);
-            toast.error("Error proceeding with confirmation.");
+            setStep('confirm_intent');
+            
+            // Enhanced error messages
+            let errMsg = "Failed to confirm and generate architecture.";
+            
+            if (err.response?.status === 400) {
+                errMsg = err.response?.data?.msg || err.response?.data?.error || "Invalid confirmation data. Please try again.";
+            } else if (err.response?.status === 401) {
+                errMsg = "Session expired. Please login again.";
+                setTimeout(() => navigate('/'), 1500);
+            } else if (err.response?.status === 500) {
+                errMsg = "Server error during architecture generation. Please try again.";
+            } else if (!err.response) {
+                errMsg = "Network error. Please check your connection.";
+            } else {
+                errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
+            }
+            
+            toast.error(errMsg, { duration: 5000 });
         }
     };
     const handleAnswerQuestion = async (answer) => {
@@ -379,9 +454,27 @@ const WorkspaceCanvas = () => {
                 }, 1200);
 
             } catch (err) {
-                console.error(err);
+                console.error('[ANSWER QUESTION ERROR]', err);
                 setIsProcessing(false);
-                toast.error("Failed to process answer. Please try again.");
+                setStep('question');
+                
+                // Enhanced error messages
+                let errMsg = "Failed to process your answer.";
+                
+                if (err.response?.status === 400) {
+                    errMsg = "Invalid answer format. Please select a valid option.";
+                } else if (err.response?.status === 401) {
+                    errMsg = "Session expired. Redirecting to login...";
+                    setTimeout(() => navigate('/'), 1500);
+                } else if (err.response?.status === 500) {
+                    errMsg = "Server error processing your answer. Please try again.";
+                } else if (!err.response) {
+                    errMsg = "Network error. Please check your connection.";
+                } else {
+                    errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
+                }
+                
+                toast.error(errMsg, { duration: 5000 });
             }
         }, 600);
     };
@@ -473,73 +566,61 @@ const WorkspaceCanvas = () => {
                             ${(step === 'input' || step === 'question' || step === 'processing')
                                     ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
                                     : 'text-gray-400 hover:bg-white/5'}`}
-                            onClick={() => infraSpec && setStep('input')}
+                            onClick={() => setStep('input')}
                         >
                             <span className="material-icons text-sm">edit_note</span>
                             <span>Requirements</span>
-                            {infraSpec && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            {(infraSpec && step !== 'input' && step !== 'question' && step !== 'processing') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
                         <div
                             className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
                             ${step === 'review_spec'
                                     ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
-                                    : (!infraSpec ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
-                            onClick={() => infraSpec && setStep('review_spec')}
+                                    : ((!infraSpec && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                            onClick={() => (infraSpec || isDeployed) && setStep('review_spec')}
                         >
                             <span className="material-icons text-sm">schema</span>
                             <span>Specification</span>
-                            {infraSpec && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            {((infraSpec || isDeployed) && step !== 'review_spec') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
                         <div
                             className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
                             ${(step === 'cost_estimation' || step === 'processing_cost')
                                     ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
-                                    : (!infraSpec ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
-                            onClick={() => costEstimation && setStep('cost_estimation')}
+                                    : ((!infraSpec && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                            onClick={() => (costEstimation || isDeployed) && setStep('cost_estimation')}
                         >
                             <span className="material-icons text-sm">savings</span>
                             <span>Cost Estimator</span>
-                            {costEstimation && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
-                        </div>
-
-                        <div
-                            className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
-                            ${step === 'requirements'
-                                    ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
-                                    : (!costEstimation ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
-                            onClick={() => costEstimation && setStep('requirements')}
-                        >
-                            <span className="material-icons text-sm">security</span>
-                            <span>NFRs</span>
-                            {requirementsData && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            {((costEstimation || isDeployed) && step !== 'cost_estimation' && step !== 'processing_cost') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
                         <div
                             className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
                             ${step === 'architecture'
                                     ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
-                                    : (!requirementsData ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
-                            onClick={() => requirementsData && setStep('architecture')}
+                                    : ((!costEstimation && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                            onClick={() => (costEstimation || isDeployed) && setStep('architecture')}
                         >
                             <span className="material-icons text-sm">design_services</span>
                             <span>Architecture</span>
-                            {architectureData && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            {((architectureData || isDeployed) && step !== 'architecture') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
 
 
                         <div
                             className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
-                            ${step === 'terraform_view'
+                            ${(step === 'terraform_view' || step === 'deployment_ready')
                                     ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
-                                    : (!architectureData ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
-                            onClick={() => architectureData && setStep('terraform_view')}
+                                    : ((!feedbackSubmitted && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                            onClick={() => (feedbackSubmitted || isDeployed) && setStep('terraform_view')}
                         >
                             <span className="material-icons text-sm">code</span>
                             <span>Terraform</span>
-                            {architectureData && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            {((feedbackSubmitted || isDeployed) && step !== 'terraform_view' && step !== 'deployment_ready') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
                         <div
@@ -561,14 +642,23 @@ const WorkspaceCanvas = () => {
                     <div className="flex items-center space-x-4">
                         <span className="text-lg font-medium text-gray-200 tracking-wide">{projectData?.name || 'Untitled Project'}</span>
                         <div className="flex items-center space-x-2">
-                            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-gray-400 tracking-wider uppercase">Draft Mode</span>
-                            <button
-                                onClick={() => handleSaveDraft(false)}
-                                className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary hover:bg-primary/20 transition-colors uppercase tracking-wider flex items-center space-x-1"
-                            >
-                                <span className="material-icons text-[10px]">save</span>
-                                <span>{workspaceId ? 'Update Draft' : 'Save Draft'}</span>
-                            </button>
+                            {isDeployed ? (
+                                <span className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-bold text-green-400 tracking-wider uppercase flex items-center space-x-1">
+                                    <span className="material-icons text-[10px]">check_circle</span>
+                                    <span>Deployed</span>
+                                </span>
+                            ) : (
+                                <>
+                                    <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-gray-400 tracking-wider uppercase">Draft Mode</span>
+                                    <button
+                                        onClick={() => handleSaveDraft(false)}
+                                        className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary hover:bg-primary/20 transition-colors uppercase tracking-wider flex items-center space-x-1"
+                                    >
+                                        <span className="material-icons text-[10px]">save</span>
+                                        <span>{workspaceId ? 'Update Draft' : 'Save Draft'}</span>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                     <button
@@ -623,35 +713,70 @@ const WorkspaceCanvas = () => {
                         {/* STEP: INPUT */}
                         {step === 'input' && (
                             <div className="space-y-8 animate-fade-in-up mt-10">
+                                {/* 🔥 Deployed Project Banner */}
+                                {isDeployed && (
+                                    <div className="bg-green-500/10 border-2 border-green-500/30 rounded-2xl p-6 flex items-start space-x-4 shadow-lg">
+                                        <div className="flex-shrink-0">
+                                            <span className="material-icons text-green-400 text-4xl">check_circle</span>
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="text-xl font-bold text-green-400 mb-2 flex items-center space-x-2">
+                                                <span>Project Successfully Deployed</span>
+                                                <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-full">Read-Only Mode</span>
+                                            </h3>
+                                            <p className="text-gray-300 text-sm leading-relaxed">
+                                                This workspace has been deployed and is now in read-only mode. You can view all details and download Terraform files, but cannot modify the architecture or configuration.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                                
                                 <div className="text-center space-y-4">
                                     <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 tracking-tight">
-                                        Architect Your Vision
+                                        {isDeployed ? 'Deployed Architecture' : 'Architect Your Vision'}
                                     </h1>
                                     <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-                                        Describe your application in plain English. Our AI Discovery Engine will analyze your intent and generate a production-grade infrastructure specification.
+                                        {isDeployed 
+                                            ? 'Review your deployed infrastructure configuration below.'
+                                            : 'Describe your application in plain English. Our AI Discovery Engine will analyze your intent and generate a production-grade infrastructure specification.'
+                                        }
                                     </p>
                                 </div>
                                 <div className="relative group">
                                     <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
                                     <div className="relative bg-surface border border-border rounded-2xl p-2 shadow-2xl">
                                         <textarea
-                                            className="w-full h-48 bg-transparent text-xl p-8 focus:outline-none resize-none placeholder-gray-600 text-gray-200 font-light leading-relaxed"
+                                            className="w-full h-48 bg-transparent text-xl p-8 focus:outline-none resize-none placeholder-gray-600 text-gray-200 font-light leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed"
                                             placeholder="e.g., I need a highly scalable e-commerce backend with microservices, handling 50k concurrent users, and strict PCI compliance..."
                                             value={description}
                                             onChange={(e) => setDescription(e.target.value)}
+                                            disabled={isDeployed}
+                                            readOnly={isDeployed}
                                         />
                                         <div className="flex justify-between items-center px-8 py-5 bg-white/5 rounded-b-xl border-t border-white/5">
                                             <div className="flex space-x-2">
-                                                <button className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400"><span className="material-icons text-xl">mic</span></button>
-                                                <button className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400"><span className="material-icons text-xl">attach_file</span></button>
+                                                <button 
+                                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed" 
+                                                    disabled={isDeployed}
+                                                >
+                                                    <span className="material-icons text-xl">mic</span>
+                                                </button>
+                                                <button 
+                                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed" 
+                                                    disabled={isDeployed}
+                                                >
+                                                    <span className="material-icons text-xl">attach_file</span>
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={handleAnalyze}
-                                                className="flex items-center space-x-3 px-8 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all transform hover:scale-[1.02] shadow-lg shadow-primary/20"
-                                            >
-                                                <span>Generate Architecture</span>
-                                                <span className="material-icons text-lg">auto_awesome</span>
-                                            </button>
+                                            {!isDeployed && (
+                                                <button
+                                                    onClick={handleAnalyze}
+                                                    className="flex items-center space-x-3 px-8 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all transform hover:scale-[1.02] shadow-lg shadow-primary/20"
+                                                >
+                                                    <span>Generate Architecture</span>
+                                                    <span className="material-icons text-lg">auto_awesome</span>
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1299,7 +1424,7 @@ const WorkspaceCanvas = () => {
                                             </div>
                                             <div className="text-sm font-bold text-white uppercase tracking-wider">% Score</div>
                                             <p className="text-xs text-gray-400 mt-2">
-                                                {selectedProvider} competitiveness
+                                                {selectedProvider || 'Provider'} competitiveness
                                             </p>
                                         </div>
 
@@ -1360,7 +1485,7 @@ const WorkspaceCanvas = () => {
                                                             : null;
                                                                                             
                                                         // Fallback to provider_details if recommended doesn't match or doesn't have services
-                                                        const services = recommendedServices || costEstimation.provider_details?.[selectedProvider]?.services || [];
+                                                        const services = recommendedServices || costEstimation.provider_details?.[selectedProvider || 'aws']?.services || [];
                                                                                             
                                                         return services
                                                             .slice(0, 6)
@@ -1399,104 +1524,6 @@ const WorkspaceCanvas = () => {
                                     </div>
                                 </div>
 
-                                {/* SECTION 6: WHAT DRIVES COST */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center space-x-2">
-                                        <span className="material-icons text-yellow-400">bolt</span>
-                                        <h3 className="text-lg font-bold text-white">What Drives Cost on {selectedProvider}</h3>
-                                    </div>
-
-                                    <div className="bg-surface border border-border rounded-2xl p-6">
-                                        <div className="space-y-4 mb-4">
-                                            {(() => {
-                                                // First try to get drivers from recommended path
-                                                const recommendedDrivers = costEstimation.recommended?.drivers || [];
-                                                
-                                                // Also try to get drivers from the selected provider in scenarios
-                                                const scenarioDrivers = costEstimation.scenarios 
-                                                    ? Object.values(costEstimation.scenarios)
-                                                        .map(profile => profile[selectedProvider])
-                                                        .filter(result => result)
-                                                        .map(result => result.drivers || [])
-                                                        .flat()
-                                                    : [];
-                                                
-                                                // Use recommended drivers if available for the selected provider, 
-                                                // otherwise use scenario drivers, then fallback to category breakdown
-                                                if (recommendedDrivers.length > 0 && costEstimation.recommended?.provider === selectedProvider) {
-                                                    // Show recommended drivers
-                                                    return recommendedDrivers
-                                                        .slice(0, 3)
-                                                        .map((driver, idx) => (
-                                                            <div key={idx} className="flex items-center justify-between">
-                                                                <div>
-                                                                    <div className="text-white font-medium">{driver.name}</div>
-                                                                    <div className="text-xs text-gray-400">
-                                                                        {driver.value} | {driver.impact}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="text-white font-bold">${driver.cost_contribution?.toFixed(2) || 'N/A'}</span>
-                                                                    <div className="text-xs text-gray-500">
-                                                                        Cost contribution
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ));
-                                                } else if (scenarioDrivers.length > 0) {
-                                                    // Show scenario drivers if available
-                                                    return scenarioDrivers
-                                                        .slice(0, 3)
-                                                        .map((driver, idx) => (
-                                                            <div key={idx} className="flex items-center justify-between">
-                                                                <div>
-                                                                    <div className="text-white font-medium">{driver.name}</div>
-                                                                    <div className="text-xs text-gray-400">
-                                                                        {driver.value} | {driver.impact}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="text-white font-bold">${driver.cost_contribution?.toFixed(2) || 'N/A'}</span>
-                                                                    <div className="text-xs text-gray-500">
-                                                                        Cost contribution
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ));
-                                                } else {
-                                                    // Fallback to category breakdown
-                                                    const selectedDetail = costEstimation.provider_details?.[selectedProvider] || {};
-                                                    const breakdown = selectedDetail.category_breakdown || [];
-                                                    const items = Array.isArray(breakdown) ? breakdown : [];
-
-                                                    return items
-                                                        .sort((a, b) => b.total - a.total)
-                                                        .slice(0, 3)
-                                                        .map((item, idx) => (
-                                                            <div key={idx} className="flex items-center justify-between">
-                                                                <div>
-                                                                    <div className="text-white font-medium capitalize">{item.category}</div>
-                                                                    <div className="text-xs text-gray-400">
-                                                                        {item.service_count} associated services
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="text-white font-bold">${(item.total || 0).toFixed(2)}</span>
-                                                                    <div className="w-24 bg-white/5 h-1.5 rounded-full mt-1">
-                                                                        <div className="bg-yellow-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, (item.total / (selectedDetail.total_monthly_cost || 1)) * 100)}%` }}></div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ));
-                                                }
-                                            })()}
-                                        </div>
-                                        <div className="text-sm text-amber-200/90 italic border-t border-amber-500/20 pt-4">
-                                            Increasing concurrency and data transfer pushes cost toward the upper range.
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {/* SECTION 7: SCENARIOS */}
                                 <div className="border border-white/5 rounded-2xl overflow-hidden">
                                     <button
@@ -1509,32 +1536,6 @@ const WorkspaceCanvas = () => {
 
                                     {selectedOption === 'scenarios' && (
                                         <div className="p-6 bg-surface animate-fade-in">
-                                            <div className="mb-6">
-                                                <h4 className="text-md font-bold text-white mb-3">Scenario Profiles</h4>
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                    <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl p-4">
-                                                        <div className="flex items-center space-x-2 mb-2">
-                                                            <span className="text-green-400">🟢</span>
-                                                            <h5 className="font-bold text-white">Cost-Effective (Recommended)</h5>
-                                                        </div>
-                                                        <p className="text-xs text-gray-400">Optimized for minimal costs with basic resources and serverless patterns.</p>
-                                                    </div>
-                                                    <div className="bg-gradient-to-br from-yellow-500/10 to-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                                                        <div className="flex items-center space-x-2 mb-2">
-                                                            <span className="text-amber-400">🟡</span>
-                                                            <h5 className="font-bold text-white">Standard</h5>
-                                                        </div>
-                                                        <p className="text-xs text-gray-400">Balanced configuration with moderate performance and availability.</p>
-                                                    </div>
-                                                    <div className="bg-gradient-to-br from-red-500/10 to-rose-500/10 border border-rose-500/20 rounded-xl p-4">
-                                                        <div className="flex items-center space-x-2 mb-2">
-                                                            <span className="text-rose-400">🔴</span>
-                                                            <h5 className="font-bold text-white">High-Performance</h5>
-                                                        </div>
-                                                        <p className="text-xs text-gray-400">Premium resources with enhanced performance and high availability.</p>
-                                                    </div>
-                                                </div>
-                                            </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                                 <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                                                     <div className="flex items-center justify-between mb-2">
@@ -1570,7 +1571,7 @@ const WorkspaceCanvas = () => {
                                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start space-x-3">
                                     <span className="material-icons text-amber-400 text-sm mt-0.5">warning</span>
                                     <p className="text-xs text-amber-200/90 leading-relaxed">
-                                        This is an approximate cost estimate based on formula-driven provider pricing for {selectedProvider}. Exact costs will be calculated when Terraform is generated and will depend on actual resource usage, region selection, and any enterprise discounts.
+                                        This is an approximate cost estimate based on formula-driven provider pricing for {selectedProvider || 'the selected provider'}. Exact costs will be calculated when Terraform is generated and will depend on actual resource usage, region selection, and any enterprise discounts.
                                     </p>
                                 </div>
 
@@ -1676,49 +1677,95 @@ const WorkspaceCanvas = () => {
                                         </div>
                                         <h2 className="text-3xl font-bold text-white">Ready for Deployment</h2>
                                         <p className="text-gray-400 mt-3 max-w-md">
-                                            Your infrastructure specification is complete.
-                                            Selected provider: <span className="text-primary font-bold">{selectedProvider}</span>
+                                            Your infrastructure is ready. Choose your deployment method below.
                                         </p>
                                     </div>
 
                                     <div className="bg-surface border border-border rounded-2xl p-6 max-w-lg w-full">
-                                        <h3 className="text-lg font-bold text-white mb-4">Summary</h3>
+                                        <h3 className="text-lg font-bold text-white mb-4">Deployment Summary</h3>
                                         <div className="space-y-3">
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Cloud Provider</span>
-                                                <span className="text-white font-medium">{selectedProvider}</span>
+                                                <span className="text-white font-medium">{selectedProvider?.toUpperCase() || 'Not Selected'}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Services Count</span>
+                                                <span className="text-white font-medium">
+                                                    {costEstimation?.recommended?.service_count || 
+                                                     costEstimation?.provider_details?.[selectedProvider]?.service_count || 
+                                                     infraSpec?.service_classes?.required_services?.length || 0} services
+                                                </span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Monthly Estimate</span>
-                                                <span className="text-green-400 font-bold">{costEstimation.provider_details?.[selectedProvider]?.formatted_cost || costEstimation.provider_details?.[selectedProvider]?.cost_range?.formatted}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Services</span>
-                                                <span className="text-white font-medium">{costEstimation.provider_details?.[selectedProvider]?.service_count || 0} services</span>
+                                                <span className="text-green-400 font-bold">
+                                                    {costEstimation?.recommended?.formatted_cost || 
+                                                     costEstimation?.provider_details?.[selectedProvider]?.formatted_cost || 
+                                                     costEstimation?.rankings?.find(r => r.provider === selectedProvider)?.formatted_cost || 
+                                                     'N/A'}
+                                                </span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Cost Profile</span>
-                                                <span className="text-white font-medium capitalize">{costEstimation?.cost_profile?.replace('_', ' ').toLowerCase()}</span>
+                                                <span className="text-white font-medium capitalize">{costEstimation?.cost_profile?.replace('_', ' ').toLowerCase() || 'standard'}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="flex space-x-4">
-                                        <button
-                                            onClick={() => setStep('cost_estimation')}
-                                            className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-                                        >
-                                            <span className="material-icons">arrow_back</span>
-                                            <span>Back to Cost Analysis</span>
-                                        </button>
-                                        <button
-                                            disabled
-                                            className="px-8 py-4 bg-white/5 border border-white/10 rounded-xl text-gray-500 font-bold uppercase tracking-wider cursor-not-allowed flex items-center space-x-3"
-                                        >
-                                            <span>Generate Terraform</span>
-                                            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded ml-2">Coming Soon</span>
-                                        </button>
+                                    {/* Deployment Options */}
+                                    <div className="flex flex-col items-center space-y-4 w-full max-w-2xl">
+                                        <div className="text-sm font-bold text-gray-400 uppercase tracking-wider">Deployment Options</div>
+                                        <div className="flex space-x-4 w-full justify-center">
+                                            {/* Self Deployment */}
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        // 🔥 FIX 5: Mark workspace as READY for deployment (not deployed)
+                                                        await axios.put(`${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000')}/api/workspaces/${id}/deploy`, {
+                                                            deployment_method: 'self',
+                                                            provider: selectedProvider
+                                                        });
+                                                        toast.success('Workspace ready! You can now deploy the downloaded Terraform code.');
+                                                        // Navigate to dashboard
+                                                        navigate('/workspaces');
+                                                    } catch (error) {
+                                                        console.error('Failed to update deployment readiness:', error);
+                                                        toast.error('Failed to mark workspace as ready');
+                                                    }
+                                                }}
+                                                className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                            >
+                                                <span className="material-icons text-lg">download_done</span>
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-sm font-bold">Self Deployment</span>
+                                                    <span className="text-xs text-gray-400">Download & deploy manually</span>
+                                                </div>
+                                            </button>
+                                            
+                                            {/* One-Click Deployment (Coming Soon) */}
+                                            <button
+                                                disabled
+                                                className="px-6 py-3 bg-gradient-to-r from-primary/10 to-blue-500/10 border border-primary/20 rounded-xl text-primary/50 font-medium cursor-not-allowed flex items-center space-x-2 relative"
+                                            >
+                                                <span className="material-icons text-lg">rocket_launch</span>
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-sm font-bold flex items-center space-x-2">
+                                                        <span>One-Click Deployment</span>
+                                                        <span className="px-2 py-0.5 bg-primary/20 rounded text-xs text-primary">Coming Soon</span>
+                                                    </span>
+                                                    <span className="text-xs text-gray-500">Automated cloud deployment</span>
+                                                </div>
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    <button
+                                        onClick={() => setStep('terraform_view')}
+                                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                    >
+                                        <span className="material-icons">arrow_back</span>
+                                        <span>Back to Terraform</span>
+                                    </button>
                                 </div>
                             )
                         }

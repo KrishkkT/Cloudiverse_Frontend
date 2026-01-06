@@ -39,7 +39,7 @@ const RequirementsStep = ({
     }
   });
 
-  const [activeTab, setActiveTab] = useState('nfr'); // nfr, region, data, deployment, observability
+  const [activeTab, setActiveTab] = useState('region'); // region, data, deployment, observability
 
   const handleNFRChange = (field, value) => {
     setRequirements(prev => ({
@@ -124,7 +124,6 @@ const RequirementsStep = ({
   };
 
   const tabs = [
-    { id: 'nfr', label: 'Constraints', icon: 'security' },
     { id: 'region', label: 'Region', icon: 'public' },
     { id: 'data', label: 'Data', icon: 'database' },
     { id: 'deployment', label: 'Deployment', icon: 'build' },
@@ -136,7 +135,7 @@ const RequirementsStep = ({
       <div className="text-center space-y-4 mb-8">
         <h2 className="text-3xl font-bold text-white">System Requirements</h2>
         <p className="text-gray-400 max-w-2xl mx-auto">
-          Define non-functional requirements, compliance, and operational constraints for your infrastructure.
+          Configure region, data, deployment, and monitoring settings for your infrastructure.
         </p>
       </div>
 
@@ -160,130 +159,6 @@ const RequirementsStep = ({
 
       {/* Tab Content */}
       <div className="bg-surface border border-border rounded-2xl p-6">
-        {activeTab === 'nfr' && (
-          <div className="space-y-6">
-            <h3 className="text-xl font-bold text-white mb-6">Non-Functional Requirements</h3>
-            
-            {/* Availability */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-white">Availability</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                {[
-                  { value: '99.5', label: 'Standard (99.5%)', desc: '~3.6 hours downtime/month - suitable for internal tools' },
-                  { value: '99.9', label: 'High (99.9%)', desc: '~43 minutes downtime/month - customer-facing apps' },
-                  { value: '99.99', label: 'Critical (99.99%)', desc: '~4 minutes downtime/month - business-critical systems' }
-                ].map(option => (
-                  <div 
-                    key={option.value}
-                    onClick={() => handleAvailabilityChange(option.value)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                      requirements.nfr.availability === option.value
-                        ? 'border-primary bg-primary/10 text-white'
-                        : 'border-white/10 text-gray-400 hover:border-white/20 hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="font-medium">{option.label}</div>
-                    <div className="text-xs opacity-70 mt-1">{option.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Latency */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-white">Latency Requirements</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {[
-                  { value: 'low', label: 'Low (<100ms)', desc: 'Real-time apps, gaming, trading platforms' },
-                  { value: 'medium', label: 'Medium (<500ms)', desc: 'Standard web apps, e-commerce, SaaS' },
-                  { value: 'high', label: 'High (<2s)', desc: 'Batch processing, analytics, background jobs' }
-                ].map(option => (
-                  <div 
-                    key={option.value}
-                    onClick={() => handleLatencyChange(option.value)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                      requirements.nfr.latency === option.value
-                        ? 'border-primary bg-primary/10 text-white'
-                        : 'border-white/10 text-gray-400 hover:border-white/20 hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="font-medium">{option.label}</div>
-                    <div className="text-xs opacity-70 mt-1">{option.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Security Level */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-white">Security Level</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {[
-                  { value: 'standard', label: 'Standard', desc: 'Basic firewalls, SSL/TLS, standard encryption' },
-                  { value: 'high', label: 'High', desc: 'Advanced threat protection, WAF, DDoS mitigation' },
-                  { value: 'maximum', label: 'Maximum', desc: 'End-to-end encryption, HSM, zero-trust architecture' }
-                ].map(option => (
-                  <div 
-                    key={option.value}
-                    onClick={() => handleSecurityChange(option.value)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                      requirements.nfr.security_level === option.value
-                        ? 'border-primary bg-primary/10 text-white'
-                        : 'border-white/10 text-gray-400 hover:border-white/20 hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="font-medium">{option.label}</div>
-                    <div className="text-xs opacity-70 mt-1">{option.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Compliance */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-white">Compliance Requirements</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {[
-                  { value: 'PCI', label: 'PCI DSS', desc: 'Payment card processing and storage security' },
-                  { value: 'GDPR', label: 'GDPR', desc: 'EU data privacy and protection regulations' },
-                  { value: 'HIPAA', label: 'HIPAA', desc: 'Healthcare data protection (US)' },
-                  { value: 'SOX', label: 'SOX', desc: 'Financial reporting and audit compliance (US)' },
-                  { value: 'FedRAMP', label: 'FedRAMP', desc: 'US government cloud security authorization' },
-                  { value: 'SOC2', label: 'SOC2', desc: 'Security, availability, and confidentiality audit' }
-                ].map(compliance => (
-                  <div 
-                    key={compliance.value}
-                    onClick={() => handleComplianceChange(compliance.value, !requirements.nfr.compliance.includes(compliance.value))}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                      requirements.nfr.compliance.includes(compliance.value)
-                        ? 'border-green-500 bg-green-500/10 text-green-400'
-                        : 'border-white/10 text-gray-400 hover:border-white/20 hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="font-medium">{compliance.label}</div>
-                    <div className="text-xs opacity-70 mt-1">{compliance.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Cost Ceiling */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-white">Cost Ceiling</h4>
-              <div className="max-w-xs">
-                <label className="block text-sm text-gray-400 mb-2">Maximum monthly cost (USD)</label>
-                <input
-                  type="number"
-                  value={requirements.nfr.cost_ceiling_usd || ''}
-                  onChange={(e) => handleNFRChange('cost_ceiling_usd', e.target.value ? parseFloat(e.target.value) : null)}
-                  placeholder="No limit"
-                  className="w-full bg-surface border border-border rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === 'region' && (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-white mb-6">Region Configuration</h3>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Cloud,
@@ -9,11 +9,28 @@ import {
   Network,
   ChevronRight,
   Star,
-  Check
+  Check,
+  ArrowUp
 } from 'lucide-react';
+import SampleDiagram from '../components/SampleDiagram';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Handle scroll to show/hide scroll-to-top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 500);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const features = [
     {
@@ -73,7 +90,6 @@ const LandingPage = () => {
     "Built-in error correction and validation",
     "Security best practices baked in",
     "Multi-provider cost comparison",
-    "Two architecture variants per cloud",
     "No cloud credentials needed"
   ];
 
@@ -239,16 +255,15 @@ const LandingPage = () => {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Architecture Preview</h2>
             <p className="text-text-secondary max-w-2xl mx-auto">
-              Visualize your cloud infrastructure with our interactive diagram builder
+              Interactive diagrams with automatic layout. Pan, zoom, and export production-ready architecture.
             </p>
           </div>
-          <div className="bg-code-block rounded-2xl p-8 border border-border">
-            <div className="aspect-video bg-background rounded-lg flex items-center justify-center border border-border">
-              <img
-                src="/cloud-diagram.jpg"
-                alt="Architecture preview diagram"
-                className="w-full h-full object-contain"
-              />
+          <div className="max-w-5xl mx-auto">
+            <SampleDiagram />
+            <div className="mt-6 text-center">
+              <p className="text-sm text-text-secondary italic">
+                Sample Serverless Web App architecture • All diagrams generated from canonical services • Export as PNG
+              </p>
             </div>
           </div>
         </div>
@@ -374,6 +389,17 @@ const LandingPage = () => {
           </div>
         </div>
       </footer>
+
+      {/* Scroll to Top Button */}
+      {showScrollTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-50 bg-primary hover:bg-primary/90 text-white p-4 rounded-full shadow-2xl transition-all transform hover:scale-110 active:scale-95 group"
+          aria-label="Scroll to top"
+        >
+          <ArrowUp className="h-6 w-6 group-hover:animate-bounce" />
+        </button>
+      )}
     </div>
   );
 };

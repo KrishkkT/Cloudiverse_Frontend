@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import ReactFlowDiagram from './ReactFlowDiagram';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000') + '/api';
 
@@ -163,71 +164,15 @@ const ArchitectureStep = ({
                     Architecture Diagram
                 </h3>
                 
-                {/* Simple SVG Diagram */}
-                <div className="bg-black/20 rounded-xl p-6 min-h-[300px] relative overflow-hidden">
-                    <svg width="100%" height="300" viewBox="0 0 800 300" className="overflow-visible">
-                        {/* Background grid pattern */}
-                        <defs>
-                            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2E3645" strokeWidth="1" opacity="0.3"/>
-                            </pattern>
-                        </defs>
-                        <rect width="100%" height="100%" fill="url(#grid)" />
-                        
-                        {/* Nodes */}
-                        {architectureData?.architecture?.nodes?.map((node, index) => {
-                            const x = node.position?.x || (index * 150) + 100;
-                            const y = node.position?.y || 150;
-                            
-                            // Determine icon based on node type
-                            let icon = 'cloud';
-                            if (node.type.includes('compute')) icon = 'memory';
-                            else if (node.type.includes('database')) icon = 'database';
-                            else if (node.type.includes('storage')) icon = 'storage';
-                            else if (node.type.includes('auth')) icon = 'lock';
-                            else if (node.type.includes('cdn')) icon = 'public';
-                            else if (node.type.includes('load_balancer')) icon = 'swap_horiz';
-                            
-                            return (
-                                <g key={node.id}>
-                                    <circle cx={x} cy={y} r="30" fill="#1F2937" stroke="#3B82F6" strokeWidth="2" />
-                                    <text x={x} y={y-35} textAnchor="middle" fill="#9CA3AF" fontSize="12" className="font-medium">
-                                        {node.label}
-                                    </text>
-                                    <text x={x} y={y} textAnchor="middle" fill="#F9FAFB" fontSize="16" className="font-bold">
-                                        {icon && <tspan dy="-2">{icon}</tspan>}
-                                    </text>
-                                </g>
-                            );
-                        })}
-                        
-                        {/* Edges */}
-                        {architectureData?.architecture?.edges?.map((edge, index) => {
-                            // Find source and target node positions
-                            const sourceNode = architectureData.architecture.nodes.find(n => n.id === edge.from);
-                            const targetNode = architectureData.architecture.nodes.find(n => n.id === edge.to);
-                            
-                            if (!sourceNode || !targetNode) return null;
-                            
-                            const x1 = sourceNode.position?.x || (architectureData.architecture.nodes.indexOf(sourceNode) * 150) + 100;
-                            const y1 = sourceNode.position?.y || 150;
-                            const x2 = targetNode.position?.x || (architectureData.architecture.nodes.indexOf(targetNode) * 150) + 100;
-                            const y2 = targetNode.position?.y || 150;
-                            
-                            return (
-                                <g key={index}>
-                                    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#6B7280" strokeWidth="2" strokeDasharray="5,5" />
-                                    <text x={(x1+x2)/2} y={(y1+y2)/2 - 10} textAnchor="middle" fill="#9CA3AF" fontSize="10">
-                                        {edge.label}
-                                    </text>
-                                </g>
-                            );
-                        })}
-                    </svg>
-                </div>
+                {/* React Flow Professional Diagram */}
+                <ReactFlowDiagram 
+                    architectureData={architectureData}
+                    provider={selectedProvider}
+                    pattern={infraSpec?.architecture_pattern || 'SERVERLESS_WEB_APP'}
+                />
                 
                 <div className="text-xs text-gray-500 mt-4 text-center italic">
-                    Visual representation of your cloud architecture. This diagram shows how services connect and interact.
+                    Interactive architecture diagram. Use mouse wheel to zoom, drag to pan. Click "Download PNG" to export.
                 </div>
             </div>
 

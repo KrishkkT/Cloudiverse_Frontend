@@ -96,9 +96,18 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-3xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-text-primary mb-2">Profile Settings</h1>
-          <p className="text-text-secondary">Manage your account information</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">Profile Settings</h1>
+            <p className="text-text-secondary">Manage your account information</p>
+          </div>
+          <button
+            onClick={() => navigate('/workspaces')}
+            className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary hover:bg-white/10 transition-colors font-medium flex items-center gap-2"
+          >
+            <span className="material-icons text-sm">dashboard</span>
+            <span>Back to Workspaces</span>
+          </button>
         </div>
         
         <div className="bg-surface border border-border rounded-xl p-6 mb-8">
