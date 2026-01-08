@@ -104,7 +104,7 @@ const WorkspaceCanvas = () => {
             const payload = {
                 infraSpec,
                 intent: aiSnapshot,
-                cost_profile: costProfile,
+                cost_profile: costProfile, // Pass the selected cost profile to backend
                 usage_profile: {
                     ...usageProfile?.usage_profile,
                     source: isUsageUserModified ? 'user_provided' : 'ai_inferred'
@@ -123,6 +123,16 @@ const WorkspaceCanvas = () => {
                 setTimeout(() => {
                     const data = response.data.data;
                     setCostEstimation(data);
+                    
+                    // Update infraSpec with sizing data from cost analysis
+                    // This ensures TerraformStep has the required sizing information
+                    if (data.sizing) {
+                        setInfraSpec(prev => ({
+                            ...prev,
+                            sizing: data.sizing
+                        }));
+                    }
+                    
                     setSelectedProvider(data.recommended?.provider || data.recommended_provider);
                     setStep('cost_estimation');
                     toast.success("Cost analysis complete!");
@@ -1241,7 +1251,7 @@ const WorkspaceCanvas = () => {
                                         </div>
                                     </div>
                                 </div>
-
+                                
                                 <div className="flex justify-between items-center pt-8 border-t border-white/5">
                                     <button
                                         onClick={() => setStep('review_spec')} // Go back to architecture
@@ -1250,14 +1260,30 @@ const WorkspaceCanvas = () => {
                                         <span className="material-icons">arrow_back</span>
                                         <span>Back to Architecture</span>
                                     </button>
-                                    <button
-                                        onClick={handleProceedToCostEstimation}
-                                        disabled={isProcessing}
-                                        className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50"
-                                    >
-                                        <span>Calculate Cloud Costs</span>
-                                        <span className="material-icons">payments</span>
-                                    </button>
+                                    <div className="flex space-x-4">
+                                        <button
+                                            onClick={() => {
+                                                setCostProfile('cost_effective');
+                                                handleProceedToCostEstimation();
+                                            }}
+                                            disabled={isProcessing}
+                                            className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50"
+                                        >
+                                            <span>Cost Effective</span>
+                                            <span className="material-icons">trending_down</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setCostProfile('high_performance');
+                                                handleProceedToCostEstimation();
+                                            }}
+                                            disabled={isProcessing}
+                                            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                                        >
+                                            <span>High Performance</span>
+                                            <span className="material-icons">speed</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1266,7 +1292,7 @@ const WorkspaceCanvas = () => {
                         {step === 'cost_estimation' && costEstimation && (
                             <div className="space-y-8 animate-fade-in pb-20 max-w-5xl mx-auto">
 
-                                {/* SECTION 4: CLOUD COMPARISON & SELECTION */}
+                                {/* SECTION 5: CLOUD COMPARISON & SELECTION */}
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-2">
@@ -1376,16 +1402,16 @@ const WorkspaceCanvas = () => {
                                                         d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                                                         fill="none"
                                                         stroke={
-                                                            (typeof costEstimation.ai_explanation?.confidence_score === "number" && costEstimation.ai_explanation.confidence_score > 0.8) ? "#22c55e" :
-                                                                (typeof costEstimation.ai_explanation?.confidence_score === "number" && costEstimation.ai_explanation.confidence_score > 0.5) ? "#eab308" : "#ef4444"
+                                                            (typeof costEstimation.confidence === "number" && costEstimation.confidence > 0.8) ? "#22c55e" :
+                                                                (typeof costEstimation.confidence === "number" && costEstimation.confidence > 0.5) ? "#eab308" : "#ef4444"
                                                         }
                                                         strokeWidth="4"
-                                                        strokeDasharray={`${(costEstimation.ai_explanation?.confidence_score || 0) * 100}, 100`}
+                                                        strokeDasharray={`${(costEstimation.confidence || 0) * 100}, 100`}
                                                     />
                                                 </svg>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                                     <span className="text-xl font-bold text-white">
-                                                        {typeof costEstimation.ai_explanation?.confidence_score === "number" ? ((costEstimation.ai_explanation.confidence_score * 100).toFixed(0)) : "0"}%
+                                                        {typeof costEstimation.confidence === "number" ? ((costEstimation.confidence * 100).toFixed(0)) : "0"}%
                                                     </span>
                                                 </div>
                                             </div>
@@ -1394,14 +1420,28 @@ const WorkspaceCanvas = () => {
                                                 <div className="relative group">
                                                     <span className="material-icons text-xs text-gray-400 cursor-help">info</span>
                                                     <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg w-64 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                                        Confidence is based on identified services, multi-cloud comparison, and inferred usage. Final costs may vary after Terraform generation.
+                                                        {costEstimation.confidence_explanation?.join('. ') || 'Confidence based on service resolution, data quality, and estimate type.'}
                                                         <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
                                                     </div>
                                                 </div>
                                             </div>
                                             <p className="text-xs text-gray-400 mt-2 line-clamp-2">
-                                                Based on identified services, multi-cloud comparison, and usage estimation. Final costs will be validated after infrastructure generation.
+                                                {costEstimation.confidence_explanation?.[0] || 'Based on architecture completeness and data quality.'}
                                             </p>
+                                            {/* ✅ NEW: Show estimate type */}
+                                            {(costEstimation.recommended?.estimate_type || costEstimation.providers?.[selectedProvider]?.estimate_type) && (
+                                                <div className="mt-3 w-full">
+                                                    <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                                                        (costEstimation.recommended?.estimate_type === 'exact' || costEstimation.providers?.[selectedProvider]?.estimate_type === 'exact')
+                                                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                    }`}>
+                                                        {(costEstimation.recommended?.estimate_type === 'exact' || costEstimation.providers?.[selectedProvider]?.estimate_type === 'exact')
+                                                            ? '✅ Exact (Terraform-based)'
+                                                            : '⚠️ Estimated (Heuristic)'}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         
                                         {/* Score Card */}
@@ -1570,9 +1610,31 @@ const WorkspaceCanvas = () => {
                                 {/* SECTION 8: DISCLAIMERS */}
                                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start space-x-3">
                                     <span className="material-icons text-amber-400 text-sm mt-0.5">warning</span>
-                                    <p className="text-xs text-amber-200/90 leading-relaxed">
-                                        This is an approximate cost estimate based on formula-driven provider pricing for {selectedProvider || 'the selected provider'}. Exact costs will be calculated when Terraform is generated and will depend on actual resource usage, region selection, and any enterprise discounts.
-                                    </p>
+                                    <div className="flex-1">
+                                        <p className="text-xs text-amber-200/90 leading-relaxed">
+                                            {(() => {
+                                                const estimateType = costEstimation.recommended?.estimate_type || costEstimation.providers?.[selectedProvider]?.estimate_type || 'heuristic';
+                                                const estimateReason = costEstimation.recommended?.estimate_reason || costEstimation.providers?.[selectedProvider]?.estimate_reason;
+                                                
+                                                if (estimateType === 'exact' || estimateType === 'infracost') {
+                                                    return (
+                                                        <>
+                                                            <strong className="font-bold">Exact Pricing:</strong> These costs are calculated using real Terraform + Infracost CLI and represent actual provider pricing. 
+                                                            Final costs may vary based on actual resource usage, region selection, and any enterprise discounts.
+                                                        </>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <>
+                                                            <strong className="font-bold">Estimated Pricing:</strong> This is an approximate cost estimate based on formula-driven provider pricing for {selectedProvider || 'the selected provider'}. 
+                                                            {estimateReason && <span className="block mt-1 text-[10px] italic">({estimateReason})</span>}
+                                                            <span className="block mt-1">Exact costs will be calculated when Terraform is generated and will depend on actual resource usage, region selection, and any enterprise discounts.</span>
+                                                        </>
+                                                    );
+                                                }
+                                            })()}
+                                        </p>
+                                    </div>
                                 </div>
 
                                 {/* Final Action */}

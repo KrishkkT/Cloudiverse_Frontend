@@ -24,6 +24,22 @@ const TerraformStep = ({
     useEffect(() => {
         const fetchTerraform = async () => {
             try {
+                // 🔒 PRE-CHECK: Verify Step 3 completed (sizing exists)
+                if (!infraSpec?.sizing) {
+                    console.warn('[TERRAFORM] Skipping generation - Step 3 not completed (missing sizing)');
+                    setError('Cost analysis must be completed before generating Terraform. Please go back and complete Step 3.');
+                    setLoading(false);
+                    return;
+                }
+                
+                // 🔒 PRE-CHECK: Verify Step 2 region resolution completed
+                if (!infraSpec?.region?.resolved_region) {
+                    console.warn('[TERRAFORM] Skipping generation - Step 2 region resolution not completed');
+                    setError('Region resolution must be completed before generating Terraform. Please go back and ensure Step 2 is completed.');
+                    setLoading(false);
+                    return;
+                }
+
                 // Determine profile logic same as feedback step
                 const providerDetails = costEstimation.provider_details?.[selectedProvider];
                 const selectedProfile = Object.entries(costEstimation.scenarios || {}).find(
@@ -41,9 +57,13 @@ const TerraformStep = ({
                     });
 
                     if (response.data.success) {
-                        // V2: Handle modular project structure
+                        // V2: Handle modular project structure with hash and manifest
                         if (response.data.terraform.structure === 'modular') {
                             setTerraformProject(response.data.terraform.project);
+                            
+                            // Store hash and manifest for audit (optional)
+                            console.log('[TERRAFORM] Hash:', response.data.terraform_hash?.substring(0, 16) + '...');
+                            console.log('[TERRAFORM] Manifest:', response.data.deployment_manifest);
                         } else {
                             // Legacy single-file support
                             setTerraformProject({'main.tf': response.data.terraform.code});
