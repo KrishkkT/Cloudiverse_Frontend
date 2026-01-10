@@ -123,7 +123,7 @@ const WorkspaceCanvas = () => {
                 setTimeout(() => {
                     const data = response.data.data;
                     setCostEstimation(data);
-                    
+
                     // Update infraSpec with sizing data from cost analysis
                     // This ensures TerraformStep has the required sizing information
                     if (data.sizing) {
@@ -132,7 +132,7 @@ const WorkspaceCanvas = () => {
                             sizing: data.sizing
                         }));
                     }
-                    
+
                     setSelectedProvider(data.recommended?.provider || data.recommended_provider);
                     setStep('cost_estimation');
                     toast.success("Cost analysis complete!");
@@ -145,10 +145,10 @@ const WorkspaceCanvas = () => {
             console.error('[COST ANALYSIS ERROR]', err);
             toast.dismiss('cost-analysis');
             setStep('usage_review');
-            
+
             // Enhanced error messages
             let errMsg = "Failed to analyze costs.";
-            
+
             if (err.response?.status === 400) {
                 errMsg = err.response?.data?.msg || "Invalid infrastructure data. Please review your architecture.";
             } else if (err.response?.status === 401) {
@@ -163,8 +163,8 @@ const WorkspaceCanvas = () => {
             } else {
                 errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
             }
-            
-            toast.error(errMsg, { 
+
+            toast.error(errMsg, {
                 duration: 6000,
                 icon: '⚠️'
             });
@@ -185,7 +185,7 @@ const WorkspaceCanvas = () => {
 
                 const res = await axios.get(`${API_BASE}/api/workspaces/${id}`, { headers });
                 const ws = res.data;
-                
+
                 // 🔥 Check if workspace is deployed
                 const deploymentStatus = ws.state_json?.deployment?.status || ws.step;
                 if (deploymentStatus === 'active' || ws.step === 'active_deployment') {
@@ -325,10 +325,10 @@ const WorkspaceCanvas = () => {
             console.error('[ANALYZE ERROR]', err);
             setIsProcessing(false);
             setStep('input');
-            
+
             // Enhanced error messages
             let errMsg = "Failed to analyze your request.";
-            
+
             if (err.response?.status === 401) {
                 errMsg = "Your session has expired. Please login again.";
                 toast.error(errMsg, { duration: 4000 });
@@ -362,7 +362,7 @@ const WorkspaceCanvas = () => {
         try {
             const token = localStorage.getItem('token');
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-            
+
             // 🔥 FIX: Ensure description exists (fallback to stored description or workspace name)
             const finalDescription = description || projectData?.name || "User confirmed intent";
 
@@ -392,10 +392,10 @@ const WorkspaceCanvas = () => {
             console.error('[CONFIRMATION ERROR]', err);
             setIsProcessing(false);
             setStep('confirm_intent');
-            
+
             // Enhanced error messages
             let errMsg = "Failed to confirm and generate architecture.";
-            
+
             if (err.response?.status === 400) {
                 errMsg = err.response?.data?.msg || err.response?.data?.error || "Invalid confirmation data. Please try again.";
             } else if (err.response?.status === 401) {
@@ -408,7 +408,7 @@ const WorkspaceCanvas = () => {
             } else {
                 errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
             }
-            
+
             toast.error(errMsg, { duration: 5000 });
         }
     };
@@ -467,10 +467,10 @@ const WorkspaceCanvas = () => {
                 console.error('[ANSWER QUESTION ERROR]', err);
                 setIsProcessing(false);
                 setStep('question');
-                
+
                 // Enhanced error messages
                 let errMsg = "Failed to process your answer.";
-                
+
                 if (err.response?.status === 400) {
                     errMsg = "Invalid answer format. Please select a valid option.";
                 } else if (err.response?.status === 401) {
@@ -483,7 +483,7 @@ const WorkspaceCanvas = () => {
                 } else {
                     errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
                 }
-                
+
                 toast.error(errMsg, { duration: 5000 });
             }
         }, 600);
@@ -740,13 +740,13 @@ const WorkspaceCanvas = () => {
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 <div className="text-center space-y-4">
                                     <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 tracking-tight">
                                         {isDeployed ? 'Deployed Architecture' : 'Architect Your Vision'}
                                     </h1>
                                     <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-                                        {isDeployed 
+                                        {isDeployed
                                             ? 'Review your deployed infrastructure configuration below.'
                                             : 'Describe your application in plain English. Our AI Discovery Engine will analyze your intent and generate a production-grade infrastructure specification.'
                                         }
@@ -765,14 +765,14 @@ const WorkspaceCanvas = () => {
                                         />
                                         <div className="flex justify-between items-center px-8 py-5 bg-white/5 rounded-b-xl border-t border-white/5">
                                             <div className="flex space-x-2">
-                                                <button 
-                                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed" 
+                                                <button
+                                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
                                                     disabled={isDeployed}
                                                 >
                                                     <span className="material-icons text-xl">mic</span>
                                                 </button>
-                                                <button 
-                                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed" 
+                                                <button
+                                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
                                                     disabled={isDeployed}
                                                 >
                                                     <span className="material-icons text-xl">attach_file</span>
@@ -1251,7 +1251,7 @@ const WorkspaceCanvas = () => {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="flex justify-between items-center pt-8 border-t border-white/5">
                                     <button
                                         onClick={() => setStep('review_spec')} // Go back to architecture
@@ -1347,7 +1347,7 @@ const WorkspaceCanvas = () => {
                                                         {(() => {
                                                             // Try to find which profile was used for this provider
                                                             let profileUsed = 'standard'; // default fallback
-                                                            
+
                                                             if (costEstimation.scenarios) {
                                                                 // Check each profile to see if this provider has data
                                                                 for (const [profileName, providers] of Object.entries(costEstimation.scenarios)) {
@@ -1357,7 +1357,7 @@ const WorkspaceCanvas = () => {
                                                                     }
                                                                 }
                                                             }
-                                                            
+
                                                             return (
                                                                 <div className="text-[10px] text-gray-400">
                                                                     {profileUsed.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} profile
@@ -1366,7 +1366,7 @@ const WorkspaceCanvas = () => {
                                                         })()}
                                                         {rank.recommended && costEstimation?.recommendation_facts && (
                                                             <div className="text-[10px] text-amber-400 italic mt-1">
-                                                                {costEstimation.recommendation_facts.facts.dominant_drivers[0] 
+                                                                {costEstimation.recommendation_facts.facts.dominant_drivers[0]
                                                                     ? `${costEstimation.recommendation_facts.facts.dominant_drivers[0].name} is a key cost driver at your usage level.`
                                                                     : 'Based on your usage patterns and cost optimization.'}
                                                             </div>
@@ -1431,11 +1431,10 @@ const WorkspaceCanvas = () => {
                                             {/* ✅ NEW: Show estimate type */}
                                             {(costEstimation.recommended?.estimate_type || costEstimation.providers?.[selectedProvider]?.estimate_type) && (
                                                 <div className="mt-3 w-full">
-                                                    <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                                                        (costEstimation.recommended?.estimate_type === 'exact' || costEstimation.providers?.[selectedProvider]?.estimate_type === 'exact')
+                                                    <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${(costEstimation.recommended?.estimate_type === 'exact' || costEstimation.providers?.[selectedProvider]?.estimate_type === 'exact')
                                                             ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                                                             : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                                    }`}>
+                                                        }`}>
                                                         {(costEstimation.recommended?.estimate_type === 'exact' || costEstimation.providers?.[selectedProvider]?.estimate_type === 'exact')
                                                             ? '✅ Exact (Terraform-based)'
                                                             : '⚠️ Estimated (Heuristic)'}
@@ -1443,7 +1442,7 @@ const WorkspaceCanvas = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        
+
                                         {/* Score Card */}
                                         <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
                                             <div className="text-3xl font-bold text-white mb-3">
@@ -1452,7 +1451,7 @@ const WorkspaceCanvas = () => {
                                                     const selectedRank = costEstimation.rankings?.find(rank => rank.provider === selectedProvider);
                                                     // If not found in rankings, try to get from scenarios
                                                     if (!selectedRank?.score) {
-                                                        const scenarioResult = costEstimation.scenarios 
+                                                        const scenarioResult = costEstimation.scenarios
                                                             ? Object.values(costEstimation.scenarios)
                                                                 .map(profile => profile[selectedProvider])
                                                                 .find(result => result)
@@ -1475,7 +1474,7 @@ const WorkspaceCanvas = () => {
                                                 <div>
                                                     <div className="text-2xl font-bold text-white">
                                                         {usageProfile?.usage_profile?.monthly_users
-                                                            ? (typeof usageProfile.usage_profile.monthly_users === 'object' 
+                                                            ? (typeof usageProfile.usage_profile.monthly_users === 'object'
                                                                 ? `${(usageProfile.usage_profile.monthly_users.min || 0).toLocaleString()} - ${(usageProfile.usage_profile.monthly_users.max || 0).toLocaleString()}`
                                                                 : usageProfile.usage_profile.monthly_users.toLocaleString())
                                                             : (costEstimation?.recommendation_facts?.facts?.usage?.monthly_users
@@ -1523,10 +1522,10 @@ const WorkspaceCanvas = () => {
                                                         const recommendedServices = costEstimation.recommended?.provider === selectedProvider
                                                             ? costEstimation.recommended.services
                                                             : null;
-                                                                                            
+
                                                         // Fallback to provider_details if recommended doesn't match or doesn't have services
                                                         const services = recommendedServices || costEstimation.provider_details?.[selectedProvider || 'aws']?.services || [];
-                                                                                            
+
                                                         return services
                                                             .slice(0, 6)
                                                             .map((s, idx) => (
@@ -1537,7 +1536,7 @@ const WorkspaceCanvas = () => {
                                                     })()}
                                                 </div>
                                             </div>
-                                            
+
                                             {/* Recommendation Details */}
                                             {costEstimation?.recommendation_facts && (
                                                 <div className="mt-4 pt-4 border-t border-amber-500/20">
@@ -1615,18 +1614,18 @@ const WorkspaceCanvas = () => {
                                             {(() => {
                                                 const estimateType = costEstimation.recommended?.estimate_type || costEstimation.providers?.[selectedProvider]?.estimate_type || 'heuristic';
                                                 const estimateReason = costEstimation.recommended?.estimate_reason || costEstimation.providers?.[selectedProvider]?.estimate_reason;
-                                                
+
                                                 if (estimateType === 'exact' || estimateType === 'infracost') {
                                                     return (
                                                         <>
-                                                            <strong className="font-bold">Exact Pricing:</strong> These costs are calculated using real Terraform + Infracost CLI and represent actual provider pricing. 
+                                                            <strong className="font-bold">Exact Pricing:</strong> These costs are calculated using real Terraform + Infracost CLI and represent actual provider pricing.
                                                             Final costs may vary based on actual resource usage, region selection, and any enterprise discounts.
                                                         </>
                                                     );
                                                 } else {
                                                     return (
                                                         <>
-                                                            <strong className="font-bold">Estimated Pricing:</strong> This is an approximate cost estimate based on formula-driven provider pricing for {selectedProvider || 'the selected provider'}. 
+                                                            <strong className="font-bold">Estimated Pricing:</strong> This is an approximate cost estimate based on formula-driven provider pricing for {selectedProvider || 'the selected provider'}.
                                                             {estimateReason && <span className="block mt-1 text-[10px] italic">({estimateReason})</span>}
                                                             <span className="block mt-1">Exact costs will be calculated when Terraform is generated and will depend on actual resource usage, region selection, and any enterprise discounts.</span>
                                                         </>
@@ -1746,25 +1745,49 @@ const WorkspaceCanvas = () => {
                                     <div className="bg-surface border border-border rounded-2xl p-6 max-w-lg w-full">
                                         <h3 className="text-lg font-bold text-white mb-4">Deployment Summary</h3>
                                         <div className="space-y-3">
+                                            {/* Project Name */}
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Project</span>
+                                                <span className="text-white font-medium">{infraSpec?.project_name || projectData?.name || 'Untitled Project'}</span>
+                                            </div>
+                                            {/* Architecture Pattern */}
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Architecture</span>
+                                                <span className="text-white font-medium capitalize">
+                                                    {infraSpec?.canonical_architecture?.pattern_name?.replace(/_/g, ' ') ||
+                                                        infraSpec?.pattern_key?.replace(/_/g, ' ') ||
+                                                        'Custom'}
+                                                </span>
+                                            </div>
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Cloud Provider</span>
                                                 <span className="text-white font-medium">{selectedProvider?.toUpperCase() || 'Not Selected'}</span>
                                             </div>
+                                            {/* Region */}
                                             <div className="flex justify-between">
-                                                <span className="text-gray-400">Services Count</span>
+                                                <span className="text-gray-400">Region</span>
                                                 <span className="text-white font-medium">
-                                                    {costEstimation?.recommended?.service_count || 
-                                                     costEstimation?.provider_details?.[selectedProvider]?.service_count || 
-                                                     infraSpec?.service_classes?.required_services?.length || 0} services
+                                                    {infraSpec?.resolved_region?.resolved ||
+                                                        infraSpec?.resolved_region?.logical?.replace(/_/g, ' ') ||
+                                                        'Default'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
+                                                <span className="text-gray-400">Services</span>
+                                                <span className="text-white font-medium">
+                                                    {infraSpec?.canonical_architecture?.deployable_services?.length ||
+                                                        costEstimation?.recommended?.service_count ||
+                                                        costEstimation?.provider_details?.[selectedProvider]?.service_count ||
+                                                        infraSpec?.service_classes?.required_services?.length || 0} services
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between border-t border-border pt-3 mt-3">
                                                 <span className="text-gray-400">Monthly Estimate</span>
-                                                <span className="text-green-400 font-bold">
-                                                    {costEstimation?.recommended?.formatted_cost || 
-                                                     costEstimation?.provider_details?.[selectedProvider]?.formatted_cost || 
-                                                     costEstimation?.rankings?.find(r => r.provider === selectedProvider)?.formatted_cost || 
-                                                     'N/A'}
+                                                <span className="text-green-400 font-bold text-lg">
+                                                    {costEstimation?.rankings?.find(r => r.provider?.toLowerCase() === selectedProvider?.toLowerCase())?.formatted_cost ||
+                                                        costEstimation?.recommended?.formatted_cost ||
+                                                        costEstimation?.provider_details?.[selectedProvider]?.formatted_cost ||
+                                                        'N/A'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
@@ -1782,17 +1805,32 @@ const WorkspaceCanvas = () => {
                                             <button
                                                 onClick={async () => {
                                                     try {
-                                                        // 🔥 FIX 5: Mark workspace as READY for deployment (not deployed)
+                                                        const token = localStorage.getItem('token');
+                                                        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
                                                         await axios.put(`${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000')}/api/workspaces/${id}/deploy`, {
                                                             deployment_method: 'self',
                                                             provider: selectedProvider
-                                                        });
-                                                        toast.success('Workspace ready! You can now deploy the downloaded Terraform code.');
-                                                        // Navigate to dashboard
+                                                        }, { headers });
+
+                                                        toast.success('🚀 Deployment confirmed! Check your email for details.', { duration: 4000 });
                                                         navigate('/workspaces');
                                                     } catch (error) {
                                                         console.error('Failed to update deployment readiness:', error);
-                                                        toast.error('Failed to mark workspace as ready');
+
+                                                        // User-friendly error messages
+                                                        if (error.response?.status === 401) {
+                                                            toast.error('Session expired. Please log in again.');
+                                                            navigate('/login');
+                                                        } else if (error.response?.status === 404) {
+                                                            toast.error('Workspace not found. It may have been deleted.');
+                                                        } else if (error.response?.status === 500) {
+                                                            toast.error(error.response?.data?.msg || 'Server error. Please try again later.');
+                                                        } else if (!error.response) {
+                                                            toast.error('Network error. Please check your connection.');
+                                                        } else {
+                                                            toast.error('Failed to mark deployment. Please try again.');
+                                                        }
                                                     }
                                                 }}
                                                 className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
@@ -1803,7 +1841,7 @@ const WorkspaceCanvas = () => {
                                                     <span className="text-xs text-gray-400">Download & deploy manually</span>
                                                 </div>
                                             </button>
-                                            
+
                                             {/* One-Click Deployment (Coming Soon) */}
                                             <button
                                                 disabled

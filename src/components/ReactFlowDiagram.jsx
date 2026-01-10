@@ -72,9 +72,9 @@ const SERVICE_ICONS = {
 function getLayoutedElements(nodes, edges, direction = 'LR') {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  
+
   // LR = Left to Right, TB = Top to Bottom
-  dagreGraph.setGraph({ 
+  dagreGraph.setGraph({
     rankdir: direction,
     nodesep: 100,  // Horizontal spacing
     ranksep: 150,  // Vertical spacing
@@ -174,9 +174,10 @@ function convertToReactFlowFormat(architectureData) {
 }
 
 const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
+  // 🔥 FIX: Include provider in dependency so diagram updates when provider changes
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => convertToReactFlowFormat(architectureData),
-    [architectureData]
+    [architectureData, provider]  // Provider change triggers re-render
   );
 
   // Apply Dagre layout
@@ -260,7 +261,7 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
           preventScrolling
         >
           <Background color="#1E293B" gap={20} size={1} />
-          <Controls 
+          <Controls
             showInteractive={false}
             style={{
               background: '#1F2937',
