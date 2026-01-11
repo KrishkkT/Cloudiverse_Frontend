@@ -19,9 +19,17 @@ export const SERVICE_CATEGORIES = [
   { id: 'compute', name: 'Compute' },
   { id: 'database', name: 'Database' },
   { id: 'storage', name: 'Storage' },
-  { id: 'networking', name: 'Networking' },
-  { id: 'security', name: 'Security' }
+  { id: 'network', name: 'Networking' },
+  { id: 'security', name: 'Security' },
+  { id: 'observability', name: 'Observability' },
+  { id: 'iot', name: 'IoT' },
+  { id: 'ml', name: 'Machine Learning' },
+  { id: 'analytics', name: 'Analytics' },
+  { id: 'integration', name: 'Integration' },
+  { id: 'devops', name: 'DevOps' },
+  { id: 'messaging', name: 'Messaging' }
 ];
+
 
 export const COLORS = {
   primary: '#3B82F6',

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building, Clock, DollarSign, Settings, User, LogOut, Loader, Search, LayoutGrid, CheckCircle2, FileCode2, PlusCircle } from 'lucide-react';
+import axios from 'axios';
+import { Plus, Building, Clock, DollarSign, Settings, User, LogOut, Loader, Search, LayoutGrid, CheckCircle2, FileCode2, PlusCircle, AlertCircle, Wifi, WifiOff, Filter } from 'lucide-react';
+import { toast } from 'react-toastify';
 
 const WorkspaceSelector = () => {
   const { user, logout } = useAuth();
@@ -10,6 +12,7 @@ const WorkspaceSelector = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
     fetchWorkspaces();
@@ -17,26 +20,35 @@ const WorkspaceSelector = () => {
 
   const fetchWorkspaces = async () => {
     try {
+      setLoading(true);
       setError(null);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces`, {
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setWorkspaces(data);
-      } else if (response.status === 401) {
+      setWorkspaces(response.data.map(ws => {
+        let parsedState = ws.state_json || {};
+        try {
+          if (typeof parsedState === 'string') parsedState = JSON.parse(parsedState);
+        } catch (e) {
+          console.warn('Failed to parse workspace state:', e);
+          parsedState = {};
+        }
+        return { ...ws, state_json: parsedState };
+      }));
+    } catch (err) {
+      console.error('Error fetching workspaces:', err);
+      if (err.response?.status === 401) {
         localStorage.removeItem('token');
         navigate('/login');
+      } else if (!err.response) {
+        setError('Server Unreachable. Please ensure the backend is running.');
       } else {
-        setError('Failed to load workspaces. Please try again.');
+        setError(err.response?.data?.msg || 'An unexpected error occurred while loading workspaces.');
       }
-    } catch (error) {
-      console.error('Error fetching workspaces:', error);
-      setError('Failed to connect to server. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -61,26 +73,65 @@ const WorkspaceSelector = () => {
   };
 
   const filteredWorkspaces = useMemo(() => {
-    return workspaces.filter(workspace =>
-      workspace.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workspace.description?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [workspaces, searchTerm]);
+    return workspaces.filter(workspace => {
+      const matchesSearch = workspace.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        workspace.description?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const isDeployed = workspace.step === 'deployed' || workspace.state_json?.is_deployed === true;
+      const isLive = workspace.state_json?.is_live === true;
+
+      let matchesFilter = true;
+      if (filterStatus === 'live') {
+        matchesFilter = isDeployed && isLive;
+      } else if (filterStatus === 'not_deployed') {
+        matchesFilter = !isDeployed;
+      }
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [workspaces, searchTerm, filterStatus]);
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
-            <h2 className="text-xl font-semibold text-red-500 mb-2">Error Loading Workspaces</h2>
-            <p className="text-text-secondary mb-4">{error}</p>
-            <button
-              onClick={fetchWorkspaces}
-              className="btn btn-primary"
-            >
-              Retry
-            </button>
+      <div className="min-h-screen bg-background flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-red-500/5 via-transparent to-transparent">
+        <div className="max-w-md w-full animate-fade-in">
+          <div className="bg-surface/40 backdrop-blur-2xl border border-red-500/20 rounded-3xl p-10 text-center shadow-2xl relative overflow-hidden group">
+            {/* Background Accent */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500/50 to-transparent"></div>
+
+            <div className="mb-8 relative inline-block">
+              <div className="absolute inset-0 bg-red-500/20 blur-2xl rounded-full scale-150 animate-pulse"></div>
+              <div className="relative w-20 h-20 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto border border-red-500/20 rotate-12 group-hover:rotate-0 transition-transform duration-500">
+                <WifiOff className="w-10 h-10 text-red-500" />
+              </div>
+            </div>
+
+            <h2 className="text-3xl font-black text-white mb-4 tracking-tight">System Offline</h2>
+            <p className="text-gray-400 mb-10 leading-relaxed text-lg italic font-medium">
+              "{error}"
+            </p>
+
+            <div className="space-y-4">
+              <button
+                onClick={fetchWorkspaces}
+                className="w-full py-4 bg-primary text-black font-black rounded-2xl transition-all transform hover:scale-[1.03] active:scale-[0.98] shadow-xl shadow-primary/20 flex items-center justify-center gap-3"
+              >
+                <div className="w-2 h-2 bg-black rounded-full animate-ping"></div>
+                TRY RECONNECTING
+              </button>
+
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full py-4 bg-white/5 text-gray-400 font-bold rounded-2xl hover:bg-white/10 transition-colors border border-white/5"
+              >
+                HARD REFRESH
+              </button>
+            </div>
           </div>
+
+          <p className="text-center mt-8 text-sm text-gray-500 font-medium">
+            Error ID: <span className="text-primary/50">ECONN_REFUSED_WS</span>
+          </p>
         </div>
       </div>
     );
@@ -134,8 +185,8 @@ const WorkspaceSelector = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
           {[
             { label: 'Total Projects', value: workspaces.length, icon: LayoutGrid, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-            { label: 'Active Deployments', value: workspaces.filter(w => w.step === 'deployed' || w.step === 'active_deployment').length, icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' },
-            { label: 'Draft Designs', value: workspaces.filter(w => w.step !== 'deployed' && w.step !== 'active_deployment').length, icon: FileCode2, color: 'text-purple-400', bg: 'bg-purple-400/10' }
+            { label: 'Active Deployments', value: workspaces.filter(w => w.state_json?.is_deployed === true && w.state_json?.is_live === true).length, icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' },
+            { label: 'Draft Designs', value: workspaces.filter(w => !w.state_json?.is_deployed).length, icon: FileCode2, color: 'text-purple-400', bg: 'bg-purple-400/10' }
           ].map((stat, idx) => (
             <div key={idx} className="bg-surface border border-border p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
               <div className="flex items-center justify-between">
@@ -153,17 +204,37 @@ const WorkspaceSelector = () => {
 
         {/* Search & Filter */}
         <div className="sticky top-4 z-10 bg-background/80 backdrop-blur-xl py-4 -my-4 animate-fade-in-up">
-          <div className="relative group max-w-2xl">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-text-subtle group-focus-within:text-primary transition-colors duration-300" />
+          <div className="flex flex-col md:flex-row gap-4 max-w-4xl">
+            <div className="relative group flex-1">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-text-subtle group-focus-within:text-primary transition-colors duration-300" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search workspaces..."
+                className="block w-full pl-12 pr-4 py-4 bg-surface border border-border rounded-xl text-text-primary placeholder-text-subtle focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all duration-300 shadow-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Search workspaces..."
-              className="block w-full pl-12 pr-4 py-4 bg-surface border border-border rounded-xl text-text-primary placeholder-text-subtle focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all duration-300 shadow-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+
+            <div className="relative min-w-[200px]">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full h-full px-4 pl-12 bg-surface border border-border rounded-xl text-text-primary focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all duration-300 outline-none appearance-none cursor-pointer font-medium"
+              >
+                <option value="all">All Projects</option>
+                <option value="live">Live</option>
+                <option value="not_deployed">Not Deployed</option>
+              </select>
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-text-subtle">
+                <Filter className="w-5 h-5" />
+              </div>
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-text-subtle">
+                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-t-[6px] border-t-current border-r-[5px] border-r-transparent"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -205,18 +276,71 @@ const WorkspaceSelector = () => {
                       <LayoutGrid className="w-6 h-6 text-primary" />
                     </div>
                     <div className="flex items-center gap-2">
-                      {(workspace.step === 'deployed' || workspace.step === 'active_deployment') && (
-                        <span className="px-3 py-1 bg-green-500/10 text-green-400 text-xs font-bold rounded-full border border-green-500/20 shadow-sm flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-                          LIVE
-                        </span>
-                      )}
                       {workspace.step === 'ready_for_deployment' && (
                         <span className="px-3 py-1 bg-amber-500/10 text-amber-400 text-xs font-bold rounded-full border border-amber-500/20 shadow-sm flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                           READY
                         </span>
                       )}
+
+                      {/* Project Status Toggle - Show beside settings for deployed projects */}
+                      {(workspace.step === 'deployed' || workspace.state_json?.is_deployed === true) && (
+                        <div className="flex items-center gap-2" title="Toggle Live Status">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+
+                              // Optimistic Update: Update UI instantly before API call
+                              const newStatus = !workspace.state_json?.is_live;
+                              setWorkspaces(prev => prev.map(w =>
+                                w.id === workspace.id
+                                  ? {
+                                    ...w,
+                                    step: 'deployed', // Force 'deployed' so toggle stays visible
+                                    state_json: {
+                                      ...w.state_json,
+                                      is_live: newStatus,
+                                      is_deployed: newStatus // Sync deploy flag as requested
+                                    }
+                                  }
+                                  : w
+                              ));
+
+                              try {
+                                const token = localStorage.getItem('token');
+                                const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+                                await axios.put(
+                                  `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/workspaces/${workspace.id}/live-status`,
+                                  { is_live: newStatus },
+                                  { headers }
+                                );
+                                // Confirm with server state
+                                fetchWorkspaces();
+                              } catch (error) {
+                                console.error('Failed to toggle live status:', error);
+                                if (error.response) {
+                                  console.error('Backend error:', error.response.status, error.response.data);
+                                }
+                                toast.error("Connection failed. Reverting status.");
+                                // Revert on failure
+                                fetchWorkspaces();
+                              }
+                            }}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface ${workspace.state_json?.is_live ? 'bg-green-500' : 'bg-gray-600'
+                              }`}
+                          >
+                            <span
+                              className={`${workspace.state_json?.is_live ? 'translate-x-5' : 'translate-x-1'
+                                } inline-block h-3 w-3 transform rounded-full bg-white transition-transform`}
+                            />
+                          </button>
+                          <span className={`text-[10px] font-bold tracking-wider ${workspace.state_json?.is_live ? 'text-green-400' : 'text-gray-500'}`}>
+                            {workspace.state_json?.is_live ? 'LIVE' : 'OFFLINE'}
+                          </span>
+                        </div>
+                      )}
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -236,11 +360,13 @@ const WorkspaceSelector = () => {
                     {workspace.description || "No description provided"}
                   </p>
 
-                  <div className="flex items-center gap-4 pt-6 border-t border-border mt-auto">
+                  <div className="flex items-center justify-between gap-4 pt-6 border-t border-border mt-auto">
                     <div className="flex items-center text-xs text-text-subtle">
                       <Clock className="w-3.5 h-3.5 mr-1.5" />
                       <span>{formatDate(workspace.updated_at)}</span>
                     </div>
+
+
                   </div>
                 </div>
               </div>

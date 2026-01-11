@@ -23,11 +23,11 @@ const CATEGORY_COLORS = {
 const SERVICE_ICONS = {
   client: '👥',
   cdn: '🌐',
-  api_gateway: '🚪',
-  serverless_compute: '⚡',
-  relational_database: '🗄️',
-  object_storage: '📁',
-  identity_auth: '🔐',
+  apigateway: '🚪',
+  computeserverless: '⚡',
+  relationaldatabase: '🗄️',
+  objectstorage: '📁',
+  identityauth: '🔐',
   cache: '⚡',
 };
 
@@ -36,28 +36,28 @@ const sampleArchitecture = {
   nodes: [
     { id: 'client', label: 'Users', type: 'client', category: 'client' },
     { id: 'cdn', label: 'CDN', type: 'cdn', category: 'network' },
-    { id: 'api_gateway', label: 'API Gateway', type: 'api_gateway', category: 'network' },
-    { id: 'serverless_compute', label: 'Lambda Functions', type: 'serverless_compute', category: 'compute' },
-    { id: 'relational_database', label: 'RDS Database', type: 'relational_database', category: 'database' },
-    { id: 'object_storage', label: 'S3 Storage', type: 'object_storage', category: 'storage' },
-    { id: 'identity_auth', label: 'Cognito Auth', type: 'identity_auth', category: 'security' },
+    { id: 'apigateway', label: 'API Gateway', type: 'apigateway', category: 'network' },
+    { id: 'computeserverless', label: 'AWS Lambda', type: 'computeserverless', category: 'compute' },
+    { id: 'relationaldatabase', label: 'RDS Database', type: 'relationaldatabase', category: 'database' },
+    { id: 'objectstorage', label: 'S3 Storage', type: 'objectstorage', category: 'storage' },
+    { id: 'identityauth', label: 'Cognito Auth', type: 'identityauth', category: 'security' },
     { id: 'cache', label: 'ElastiCache', type: 'cache', category: 'database' },
   ],
   edges: [
     { from: 'client', to: 'cdn', label: 'requests' },
-    { from: 'cdn', to: 'api_gateway', label: 'routes' },
-    { from: 'api_gateway', to: 'serverless_compute', label: 'invokes' },
-    { from: 'serverless_compute', to: 'relational_database', label: 'reads/writes' },
-    { from: 'serverless_compute', to: 'cache', label: 'caches' },
-    { from: 'serverless_compute', to: 'object_storage', label: 'stores' },
-    { from: 'serverless_compute', to: 'identity_auth', label: 'authenticates' },
+    { from: 'cdn', to: 'apigateway', label: 'routes' },
+    { from: 'apigateway', to: 'computeserverless', label: 'invokes' },
+    { from: 'computeserverless', to: 'relationaldatabase', label: 'reads/writes' },
+    { from: 'monitoring', to: 'computeserverless', label: 'monitors' },
+    { from: 'computeserverless', to: 'objectstorage', label: 'stores' },
+    { from: 'computeserverless', to: 'identityauth', label: 'authenticates' },
   ],
 };
 
 function getLayoutedElements(nodes, edges) {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ 
+  dagreGraph.setGraph({
     rankdir: 'LR',
     nodesep: 80,
     ranksep: 120,
@@ -163,7 +163,7 @@ const SampleDiagram = () => {
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#1E293B" gap={20} size={1} />
-        <Controls 
+        <Controls
           showInteractive={false}
           style={{
             background: '#1F2937',

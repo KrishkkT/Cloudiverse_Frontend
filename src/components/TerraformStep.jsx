@@ -12,7 +12,8 @@ const TerraformStep = ({
     selectedProvider,
     costEstimation,
     onComplete,
-    onBack
+    onBack,
+    isDeployed
 }) => {
     const [loading, setLoading] = useState(true);
     const [terraformProject, setTerraformProject] = useState(null); // V2: Folder structure
@@ -31,7 +32,7 @@ const TerraformStep = ({
                     setLoading(false);
                     return;
                 }
-                
+
                 // 🔒 PRE-CHECK: Verify Step 2 region resolution completed
                 if (!infraSpec?.region?.resolved_region) {
                     console.warn('[TERRAFORM] Skipping generation - Step 2 region resolution not completed');
@@ -60,28 +61,28 @@ const TerraformStep = ({
                         // V2: Handle modular project structure with hash and manifest
                         if (response.data.terraform.structure === 'modular') {
                             setTerraformProject(response.data.terraform.project);
-                            
+
                             // Store hash and manifest for audit (optional)
                             console.log('[TERRAFORM] Hash:', response.data.terraform_hash?.substring(0, 16) + '...');
                             console.log('[TERRAFORM] Manifest:', response.data.deployment_manifest);
                         } else {
                             // Legacy single-file support
-                            setTerraformProject({'main.tf': response.data.terraform.code});
+                            setTerraformProject({ 'main.tf': response.data.terraform.code });
                         }
                         setServices(response.data.services || []);
                     }
                 } catch (err) {
                     console.warn('Terraform generation failed (non-blocking):', err);
                     console.error('[TERRAFORM ERROR] Full error:', err.response?.data);
-                    
+
                     // 🔒 FIX 4: Check if this is a "pattern not available" error
                     const errorMessage = err.response?.data?.message || err.message || '';
                     const errorDetails = err.response?.data?.details || '';
-                    
+
                     console.error('[TERRAFORM ERROR] Message:', errorMessage);
                     console.error('[TERRAFORM ERROR] Details:', errorDetails);
-                    
-                    if (errorMessage.includes('No template for pattern') || 
+
+                    if (errorMessage.includes('No template for pattern') ||
                         errorMessage.includes('not available') ||
                         errorMessage.includes('under construction')) {
                         // This is expected for new patterns - show coming soon message
@@ -108,11 +109,11 @@ const TerraformStep = ({
     // Get currently displayed file content
     const getCurrentFileContent = () => {
         if (!terraformProject) return '';
-        
+
         // Navigate nested structure (modules/xxx/main.tf)
         const parts = selectedFile.split('/');
         let content = terraformProject;
-        
+
         for (const part of parts) {
             if (typeof content === 'object' && content[part]) {
                 content = content[part];
@@ -120,34 +121,34 @@ const TerraformStep = ({
                 return '';
             }
         }
-        
+
         return typeof content === 'string' ? content : '';
     };
 
     // Get flat list of all files for file tree
     const getAllFiles = (obj, prefix = '') => {
         let files = [];
-        
+
         for (const [key, value] of Object.entries(obj)) {
             const path = prefix ? `${prefix}/${key}` : key;
-            
+
             if (typeof value === 'string') {
                 files.push(path);
             } else if (typeof value === 'object') {
                 files = files.concat(getAllFiles(value, path));
             }
         }
-        
+
         return files;
     };
 
     // Get file tree with folders and files organized
     const getFileTree = (obj, prefix = '') => {
         const items = [];
-        
+
         for (const [key, value] of Object.entries(obj)) {
             const path = prefix ? `${prefix}/${key}` : key;
-            
+
             if (typeof value === 'string') {
                 // It's a file
                 items.push({ path, name: key, type: 'file', depth: path.split('/').length - 1 });
@@ -158,7 +159,7 @@ const TerraformStep = ({
                 items.push(...getFileTree(value, path));
             }
         }
-        
+
         return items;
     };
 
@@ -170,10 +171,10 @@ const TerraformStep = ({
 
     const downloadZip = async () => {
         if (!terraformProject) return;
-        
+
         const zip = new JSZip();
         const projectName = infraSpec.project_name || 'cloudiverse-project';
-        
+
         // Recursively add files to ZIP
         const addToZip = (obj, folder) => {
             for (const [key, value] of Object.entries(obj)) {
@@ -185,9 +186,9 @@ const TerraformStep = ({
                 }
             }
         };
-        
+
         addToZip(terraformProject, zip);
-        
+
         const blob = await zip.generateAsync({ type: 'blob' });
         saveAs(blob, `${projectName}-terraform.zip`);
         toast.success('Downloaded Terraform project as ZIP');
@@ -211,7 +212,7 @@ const TerraformStep = ({
     // 🔒 FIX 4: Coming Soon UI (graceful, not an error)
     if (isComingSoon) {
         const patternName = infraSpec?.architecture_pattern || infraSpec?.service_classes?.pattern_name || 'this pattern';
-        
+
         return (
             <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-20">
                 <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6">
@@ -225,7 +226,7 @@ const TerraformStep = ({
                             Your architecture and cost estimates are saved and validated. You can continue with manual infrastructure setup or check back later for automated Terraform generation.
                         </p>
                     </div>
-                    
+
                     {/* Architecture Summary */}
                     <div className="bg-white/5 border border-white/10 rounded-xl p-6 w-full max-w-2xl">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Your Architecture Summary</h3>
@@ -244,7 +245,7 @@ const TerraformStep = ({
                             </div>
                         </div>
                     </div>
-                    
+
                     <button
                         onClick={onComplete}
                         className="mt-6 px-8 py-3 bg-primary hover:bg-primary/90 rounded-xl text-white font-semibold transition-colors flex items-center space-x-2"
@@ -256,7 +257,7 @@ const TerraformStep = ({
             </div>
         );
     }
-    
+
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 animate-fade-in">
@@ -313,19 +314,18 @@ const TerraformStep = ({
                             const isFolder = item.type === 'folder';
                             const isSelected = item.path === selectedFile;
                             const indent = item.depth * 16;
-                            
+
                             return (
                                 <button
                                     key={item.path}
                                     onClick={() => !isFolder && setSelectedFile(item.path)}
                                     disabled={isFolder}
-                                    className={`w-full text-left px-2 py-1.5 rounded text-xs font-mono transition-colors flex items-center space-x-2 ${
-                                        isFolder
-                                            ? 'text-amber-400 font-semibold cursor-default'
-                                            : isSelected
+                                    className={`w-full text-left px-2 py-1.5 rounded text-xs font-mono transition-colors flex items-center space-x-2 ${isFolder
+                                        ? 'text-amber-400 font-semibold cursor-default'
+                                        : isSelected
                                             ? 'bg-primary/20 text-primary border border-primary/30'
                                             : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                    }`}
+                                        }`}
                                     style={{ paddingLeft: `${8 + indent}px` }}
                                 >
                                     <span className="material-icons text-xs">
@@ -369,24 +369,26 @@ const TerraformStep = ({
                 </div>
             )}
 
-            <div className="flex justify-between items-center pt-8 border-t border-white/5 mt-8">
-                <button
-                    onClick={onBack}
-                    className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-                >
-                    <span className="material-icons">arrow_back</span>
-                    <span>Back</span>
-                </button>
-                
-                {/* Continue to Deployment Summary */}
-                <button
-                    onClick={onComplete}
-                    className="px-8 py-4 bg-primary hover:bg-primary/90 border border-primary/20 rounded-xl text-black font-bold transition-all flex items-center space-x-3"
-                >
-                    <span className="material-icons">check_circle</span>
-                    <span>Continue to Deployment</span>
-                </button>
-            </div>
+            {!isDeployed && (
+                <div className="flex justify-between items-center pt-8 border-t border-white/5 mt-8">
+                    <button
+                        onClick={onBack}
+                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                    >
+                        <span className="material-icons">arrow_back</span>
+                        <span>Back</span>
+                    </button>
+
+                    {/* Continue to Summary */}
+                    <button
+                        onClick={onComplete}
+                        className="px-8 py-4 bg-primary hover:bg-primary/90 border border-primary/20 rounded-xl text-black font-bold transition-all flex items-center space-x-3"
+                    >
+                        <span className="material-icons">summarize</span>
+                        <span>View Summary</span>
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

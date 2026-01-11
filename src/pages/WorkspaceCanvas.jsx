@@ -33,11 +33,14 @@ const WorkspaceCanvas = () => {
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [requirementsData, setRequirementsData] = useState(null);
     const [isDeployed, setIsDeployed] = useState(false); // 🔥 Track deployment status
+    const [deploymentMethod, setDeploymentMethod] = useState(null); // 'self' or 'oneclick'
+    const [isProjectLive, setIsProjectLive] = useState(false); // Track if project is live
 
     // Polish-to-Production States
     const [isAssumptionsDrifted, setIsAssumptionsDrifted] = useState(false);
     const [isUsageUserModified, setIsUsageUserModified] = useState(false);
     const [initialDescription, setInitialDescription] = useState('');
+    const [serverError, setServerError] = useState(null); // 🔥 Track critical connectivity errors
 
     // Detect Drift
     useEffect(() => {
@@ -51,8 +54,34 @@ const WorkspaceCanvas = () => {
         }
     }, [description, initialDescription, costEstimation]);
 
+    const handleApiError = (err, fallbackMsg = "An error occurred") => {
+        console.error('[API ERROR]', err);
+        setIsProcessing(false);
+
+        let errMsg = fallbackMsg;
+        if (err.response?.status === 401) {
+            errMsg = "Your session has expired. Please login again.";
+            toast.error(errMsg);
+            setTimeout(() => navigate('/login'), 1500);
+        } else if (err.response?.status === 500) {
+            errMsg = "Server error occurred. Our team has been notified.";
+            setServerError(errMsg);
+        } else if (!err.response) {
+            errMsg = "Cannot connect to server. Please ensure the backend is running.";
+            setServerError(errMsg);
+        } else {
+            errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
+            toast.error(errMsg);
+        }
+        return errMsg;
+    };
+
     // STEP 2.5: Usage Prediction Handler
     const handleAnalyzeUsage = async () => {
+        if (isDeployed) {
+            setStep('usage_review');
+            return;
+        }
         if (usageProfile) {
             console.log("Usage profile already exists, skipping redundant AI call.");
             setStep('usage_review');
@@ -78,15 +107,18 @@ const WorkspaceCanvas = () => {
             }, 1000);
 
         } catch (err) {
-            console.error("Usage Prediction Error:", err);
-            setIsProcessing(false);
+            handleApiError(err, "Failed to estimate usage.");
             setStep('review_spec');
-            toast.error("Failed to estimate usage. Skipping to manual mode.");
         }
     };
 
     // STEP 3: Cost Estimation Handler (Updated to use Usage Profile)
     const handleProceedToCostEstimation = async () => {
+        if (isDeployed) {
+            setStep('cost_estimation');
+            return;
+        }
+
         if (!infraSpec || !aiSnapshot) {
             toast.error("Missing infrastructure data. Please restart.");
             return;
@@ -133,7 +165,8 @@ const WorkspaceCanvas = () => {
                         }));
                     }
 
-                    setSelectedProvider(data.recommended?.provider || data.recommended_provider);
+                    const providerFromRes = data.recommended?.provider || data.recommended_provider;
+                    setSelectedProvider(providerFromRes ? providerFromRes.toUpperCase() : null);
                     setStep('cost_estimation');
                     toast.success("Cost analysis complete!");
                 }, 100);
@@ -142,32 +175,9 @@ const WorkspaceCanvas = () => {
             }
 
         } catch (err) {
-            console.error('[COST ANALYSIS ERROR]', err);
             toast.dismiss('cost-analysis');
+            handleApiError(err, "Failed to analyze costs.");
             setStep('usage_review');
-
-            // Enhanced error messages
-            let errMsg = "Failed to analyze costs.";
-
-            if (err.response?.status === 400) {
-                errMsg = err.response?.data?.msg || "Invalid infrastructure data. Please review your architecture.";
-            } else if (err.response?.status === 401) {
-                errMsg = "Session expired. Please login again.";
-                setTimeout(() => navigate('/'), 1500);
-            } else if (err.response?.status === 500) {
-                errMsg = err.response?.data?.error || "Server error during cost calculation. Please try again.";
-            } else if (err.code === 'ECONNABORTED') {
-                errMsg = "Cost analysis timed out. Please try again.";
-            } else if (!err.response) {
-                errMsg = "Cannot reach cost analysis service. Check your connection.";
-            } else {
-                errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
-            }
-
-            toast.error(errMsg, {
-                duration: 6000,
-                icon: '⚠️'
-            });
         } finally {
             setIsProcessing(false);
         }
@@ -229,12 +239,25 @@ const WorkspaceCanvas = () => {
                         setSelectedProvider(savedState.selectedProvider);
                     } else if (savedState.costEstimation?.recommended?.provider) {
                         // Fallback: extract from cost estimation
-                        setSelectedProvider(savedState.costEstimation.recommended.provider);
+                        setSelectedProvider(savedState.costEstimation.recommended.provider.toUpperCase());
+                    }
+
+                    // Restore project live status
+                    if (savedState.is_live !== undefined) {
+                        setIsProjectLive(savedState.is_live);
+                    }
+                    if (savedState.is_deployed) {
+                        setIsDeployed(savedState.is_deployed);
                     }
 
                     // Merge saved projectData (spec data) with structural data
                     if (savedState.projectData) {
                         setProjectData(prev => ({ ...prev, ...savedState.projectData }));
+                    }
+
+                    // Restore Usage Profile
+                    if (savedState.usageProfile) {
+                        setUsageProfile(savedState.usageProfile);
                     }
                 }
 
@@ -246,25 +269,10 @@ const WorkspaceCanvas = () => {
                 console.log("Workspace loaded:", ws.name);
 
             } catch (err) {
-                console.error("Load Error:", err);
-                if (err.response) {
-                    if (err.response.status === 401) {
-                        toast.error("Session expired. Please login again.");
-                        navigate('/'); // Or /login
-                    } else if (err.response.status === 403) {
-                        toast.error("You do not have permission to view this workspace.");
-                        navigate('/workspaces');
-                    } else if (err.response.status === 404) {
-                        toast.error("Workspace not found. It may have been deleted.");
-                        navigate('/workspaces');
-                    } else {
-                        toast.error("Failed to load workspace. Server error.");
-                    }
-                } else {
-                    toast.error("Connection failed. Please check your internet.");
+                handleApiError(err, "Failed to load workspace.");
+                if (err.response?.status === 404) {
+                    navigate('/workspaces');
                 }
-                // navigate('/workspaces'); // Don't always redirect if it's just a transient error? 
-                // Actually for load failure on canvas, we generally want to exit.
             }
         };
 
@@ -272,6 +280,8 @@ const WorkspaceCanvas = () => {
     }, [id, navigate]);
 
     const handleAnalyze = async () => {
+        if (isDeployed) return;
+
         if (!description.trim()) {
             toast.error("Please describe your project first!");
             return;
@@ -322,33 +332,8 @@ const WorkspaceCanvas = () => {
             }, 1200);
 
         } catch (err) {
-            console.error('[ANALYZE ERROR]', err);
-            setIsProcessing(false);
+            handleApiError(err, "Failed to analyze your request.");
             setStep('input');
-
-            // Enhanced error messages
-            let errMsg = "Failed to analyze your request.";
-
-            if (err.response?.status === 401) {
-                errMsg = "Your session has expired. Please login again.";
-                toast.error(errMsg, { duration: 4000 });
-                setTimeout(() => navigate('/'), 1500);
-            } else if (err.response?.status === 400) {
-                errMsg = err.response?.data?.msg || err.response?.data?.error || "Invalid request. Please check your input.";
-                toast.error(errMsg, { duration: 5000 });
-            } else if (err.response?.status === 500) {
-                errMsg = "Server error occurred. Please try again or contact support.";
-                toast.error(errMsg, { duration: 5000 });
-            } else if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
-                errMsg = "Request timeout. Please check your connection and try again.";
-                toast.error(errMsg, { duration: 5000 });
-            } else if (!err.response) {
-                errMsg = "Cannot connect to server. Please check your internet connection.";
-                toast.error(errMsg, { duration: 5000 });
-            } else {
-                errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
-                toast.error(errMsg, { duration: 5000 });
-            }
         }
     };
 
@@ -356,6 +341,8 @@ const WorkspaceCanvas = () => {
     // If we ever need it back, look at git history.
     // RESTORED: As per Step1.txt "User Confirmation Gate"
     const handleConfirmation = async (approvedAnalysis) => {
+        if (isDeployed) return;
+
         setIsProcessing(true);
         setStep('processing');
 
@@ -413,6 +400,8 @@ const WorkspaceCanvas = () => {
         }
     };
     const handleAnswerQuestion = async (answer) => {
+        if (isDeployed) return;
+
         setSelectedOption(answer);
 
         setTimeout(async () => {
@@ -464,32 +453,17 @@ const WorkspaceCanvas = () => {
                 }, 1200);
 
             } catch (err) {
-                console.error('[ANSWER QUESTION ERROR]', err);
-                setIsProcessing(false);
+                handleApiError(err, "Failed to process your answer.");
                 setStep('question');
-
-                // Enhanced error messages
-                let errMsg = "Failed to process your answer.";
-
-                if (err.response?.status === 400) {
-                    errMsg = "Invalid answer format. Please select a valid option.";
-                } else if (err.response?.status === 401) {
-                    errMsg = "Session expired. Redirecting to login...";
-                    setTimeout(() => navigate('/'), 1500);
-                } else if (err.response?.status === 500) {
-                    errMsg = "Server error processing your answer. Please try again.";
-                } else if (!err.response) {
-                    errMsg = "Network error. Please check your connection.";
-                } else {
-                    errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
-                }
-
-                toast.error(errMsg, { duration: 5000 });
             }
         }, 600);
     };
 
     const handleSaveDraft = async (silent = false) => {
+        if (isDeployed) {
+            console.log("Draft save skipped: Project is deployed (read-only)");
+            return;
+        }
         try {
             const token = localStorage.getItem('token');
             const payload = {
@@ -506,6 +480,7 @@ const WorkspaceCanvas = () => {
                     aiSnapshot,
                     costEstimation,
                     costProfile,
+                    usageProfile, // 🔥 Persist Usage Profile
                     step
                 }
             };
@@ -525,17 +500,17 @@ const WorkspaceCanvas = () => {
             }
 
         } catch (err) {
-            console.error("Save Error:", err);
             if (!silent) {
-                const errMsg = err.response?.data?.msg || err.message || "Unknown error";
-                toast.error(`Failed to save draft: ${errMsg}`);
+                handleApiError(err, "Failed to save draft.");
+            } else {
+                console.error("Silent Save Error:", err);
             }
         }
     };
 
     // Auto-save when step changes
     useEffect(() => {
-        if (step && workspaceId && step !== 'input' && step !== 'processing') {
+        if (step && workspaceId && step !== 'input' && step !== 'processing' && !isDeployed) {
             // Debounce auto-save to prevent spam
             const timer = setTimeout(() => {
                 handleSaveDraft(true); // Silent save
@@ -543,7 +518,7 @@ const WorkspaceCanvas = () => {
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [step, infraSpec, costEstimation]);
+    }, [step, infraSpec, costEstimation, isDeployed]);
 
 
 
@@ -556,6 +531,31 @@ const WorkspaceCanvas = () => {
                     border: '1px solid var(--color-border, #2E3645)'
                 }
             }} />
+
+            {/* Global Error Banner */}
+            {serverError && (
+                <div className="fixed top-0 left-0 right-0 z-[1000] bg-red-600/95 backdrop-blur-md text-white p-4 shadow-2xl flex items-center justify-center gap-6 animate-slide-down border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                        <span className="material-icons text-white animate-pulse">report_problem</span>
+                        <span className="font-bold text-lg tracking-wide">{serverError}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => { setServerError(null); window.location.reload(); }}
+                            className="px-6 py-2 bg-white text-red-600 rounded-xl text-sm font-black hover:bg-gray-100 transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                        >
+                            RECONNECT NOW
+                        </button>
+                        <button
+                            onClick={() => setServerError(null)}
+                            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                            title="Dismiss"
+                        >
+                            <span className="material-icons text-xl">close</span>
+                        </button>
+                    </div>
+                </div>
+            )}
             {/* Background Gradients */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]"></div>
@@ -614,24 +614,27 @@ const WorkspaceCanvas = () => {
                                     : ((!costEstimation && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
                             onClick={() => (costEstimation || isDeployed) && setStep('architecture')}
                         >
-                            <span className="material-icons text-sm">design_services</span>
-                            <span>Architecture</span>
+                            <span className="material-icons text-sm">account_tree</span>
+                            <span>Diagram</span>
                             {((architectureData || isDeployed) && step !== 'architecture') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
 
 
-                        <div
-                            className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
-                            ${(step === 'terraform_view' || step === 'deployment_ready')
-                                    ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
-                                    : ((!feedbackSubmitted && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
-                            onClick={() => (feedbackSubmitted || isDeployed) && setStep('terraform_view')}
-                        >
-                            <span className="material-icons text-sm">code</span>
-                            <span>Terraform</span>
-                            {((feedbackSubmitted || isDeployed) && step !== 'terraform_view' && step !== 'deployment_ready') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
-                        </div>
+                        {/* Terraform - Only show after choosing Self Deployment */}
+                        {(deploymentMethod === 'self' || isDeployed) && (
+                            <div
+                                className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
+                                ${(step === 'terraform_view' || step === 'deployment_ready')
+                                        ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
+                                        : ((!feedbackSubmitted && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                                onClick={() => (feedbackSubmitted || isDeployed) && setStep('terraform_view')}
+                            >
+                                <span className="material-icons text-sm">code</span>
+                                <span>Terraform</span>
+                                {((feedbackSubmitted || isDeployed) && step !== 'terraform_view' && step !== 'deployment_ready') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            </div>
+                        )}
 
                         <div
                             className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all cursor-pointer text-gray-400 hover:bg-white/5`}
@@ -648,7 +651,7 @@ const WorkspaceCanvas = () => {
             <div className="flex-1 flex flex-col relative overflow-y-auto z-10 backdrop-blur-sm">
 
                 {/* Header */}
-                <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-black/20 backdrop-blur-md sticky top-0 z-20">
+                <header className="min-h-[72px] py-4 border-b border-white/5 flex items-center justify-between px-8 bg-black/30 backdrop-blur-md sticky top-0 z-20 flex-shrink-0">
                     <div className="flex items-center space-x-4">
                         <span className="text-lg font-medium text-gray-200 tracking-wide">{projectData?.name || 'Untitled Project'}</span>
                         <div className="flex items-center space-x-2">
@@ -681,10 +684,24 @@ const WorkspaceCanvas = () => {
                 </header>
 
                 {/* Content Area */}
-                <div className="flex-1 p-8 flex">
-                    <div className="w-full max-w-5xl space-y-12 mx-auto">
-                        {/* OPTION A: ASSUMPTION DRIFT WARNING */}
-                        {isAssumptionsDrifted && (
+                <div className="flex-1 p-6 pt-4 flex">
+                    <div className="w-full max-w-5xl space-y-8 mx-auto">
+                        {/* 🔥 GLOBAL: Deployed Project Banner (View-Only Mode) */}
+                        {isDeployed && (
+                            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <span className="material-icons text-green-400">verified</span>
+                                    <div>
+                                        <span className="text-green-400 font-bold">Deployed Project</span>
+                                        <span className="text-gray-400 ml-2 text-sm">• View-only mode. Navigate using the sidebar to review all details.</span>
+                                    </div>
+                                </div>
+                                <span className="px-3 py-1 bg-green-500/20 text-green-300 text-xs font-bold rounded-full">READ-ONLY</span>
+                            </div>
+                        )}
+
+                        {/* OPTION A: ASSUMPTION DRIFT WARNING - Only show if NOT deployed */}
+                        {!isDeployed && isAssumptionsDrifted && (
                             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex items-center justify-between animate-shake">
                                 <div className="flex items-center space-x-3">
                                     <span className="material-icons text-yellow-500">warning</span>
@@ -722,24 +739,7 @@ const WorkspaceCanvas = () => {
 
                         {/* STEP: INPUT */}
                         {step === 'input' && (
-                            <div className="space-y-8 animate-fade-in-up mt-10">
-                                {/* 🔥 Deployed Project Banner */}
-                                {isDeployed && (
-                                    <div className="bg-green-500/10 border-2 border-green-500/30 rounded-2xl p-6 flex items-start space-x-4 shadow-lg">
-                                        <div className="flex-shrink-0">
-                                            <span className="material-icons text-green-400 text-4xl">check_circle</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="text-xl font-bold text-green-400 mb-2 flex items-center space-x-2">
-                                                <span>Project Successfully Deployed</span>
-                                                <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-full">Read-Only Mode</span>
-                                            </h3>
-                                            <p className="text-gray-300 text-sm leading-relaxed">
-                                                This workspace has been deployed and is now in read-only mode. You can view all details and download Terraform files, but cannot modify the architecture or configuration.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
+                            <div className="space-y-8 animate-fade-in-up mt-6">
 
                                 <div className="text-center space-y-4">
                                     <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 tracking-tight">
@@ -795,7 +795,7 @@ const WorkspaceCanvas = () => {
 
                         {/* STEP: QUESTION (AI Clarification) */}
                         {step === 'question' && currentQuestion && (
-                            <div className="space-y-8 animate-fade-in-up max-w-2xl mx-auto mt-12 pb-20">
+                            <div className="space-y-8 animate-fade-in-up max-w-4xl mx-auto mt-12 pb-20">
                                 <div className="text-center space-y-4">
                                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <span className="material-icons text-primary text-3xl">psychology</span>
@@ -804,7 +804,7 @@ const WorkspaceCanvas = () => {
                                     <p className="text-gray-400">{currentQuestion.clarifying_question}</p>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {currentQuestion.suggested_options?.map((opt, idx) => (
                                         <button
                                             key={idx}
@@ -893,7 +893,7 @@ const WorkspaceCanvas = () => {
                                                         {/* Confirmed Features */}
                                                         <div className="space-y-2">
                                                             <div className="text-[10px] text-green-500 font-bold uppercase">Confirmed Present</div>
-                                                            <ul className="grid grid-cols-1 gap-1.5">
+                                                            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                                 {Object.entries(currentQuestion.features || {}).filter(([_, v]) => v === true).map(([f, _], i) => (
                                                                     <li key={i} className="flex items-center text-xs text-gray-200 bg-green-500/5 px-2 py-1 rounded">
                                                                         <span className="material-icons text-[12px] text-green-500 mr-2">check_circle</span>
@@ -909,7 +909,7 @@ const WorkspaceCanvas = () => {
                                                         {/* Unknown / Not Assumed */}
                                                         <div className="space-y-2">
                                                             <div className="text-[10px] text-gray-500 font-bold uppercase">What we did NOT assume</div>
-                                                            <ul className="grid grid-cols-1 gap-1.5 opacity-60">
+                                                            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 opacity-60">
                                                                 {Object.entries(currentQuestion.features || {}).filter(([_, v]) => v === 'unknown' || v === false).map(([f, v], i) => (
                                                                     <li key={i} className="flex items-center text-xs text-gray-400">
                                                                         <span className="material-icons text-[12px] text-gray-600 mr-2">
@@ -1078,8 +1078,8 @@ const WorkspaceCanvas = () => {
                                 <div className="flex justify-end pt-4">
                                     <button
                                         onClick={handleAnalyzeUsage}
-                                        disabled={isProcessing}
-                                        className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+                                        disabled={isProcessing || isDeployed}
+                                        className={`px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed`}
                                     >
                                         <span>Estimate Usage & Costs</span>
                                         <span className="material-icons">analytics</span>
@@ -1106,7 +1106,19 @@ const WorkspaceCanvas = () => {
                         {step === 'usage_review' && usageProfile && (
                             <div className="space-y-8 animate-fade-in pb-20 max-w-4xl mx-auto">
                                 <div className="text-center space-y-4 mb-8">
-                                    <h2 className="text-3xl font-bold text-white">Estimated Usage Profile</h2>
+                                    <div className="flex items-center justify-center space-x-2">
+                                        <h2 className="text-3xl font-bold text-white">Estimated Usage Profile</h2>
+                                        <div className="relative group">
+                                            <span className="material-icons text-gray-400 cursor-help hover:text-primary transition-colors">info</span>
+                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-800 text-white text-xs rounded-xl shadow-lg w-72 opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                                <strong className="text-primary">Infracost Integration</strong>
+                                                <p className="mt-1 text-gray-300 leading-relaxed">
+                                                    These values are used to generate Infracost usage inputs for accurate, usage-based cloud pricing. Adjust to match your expected workload.
+                                                </p>
+                                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <p className="text-gray-400 max-w-2xl mx-auto">
                                         Based on your project description ("{projectData?.name}"), we've inferred the following usage patterns to generate accurate costs.
                                     </p>
@@ -1124,11 +1136,21 @@ const WorkspaceCanvas = () => {
                                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Min</span>
                                                 <input
                                                     type="number"
-                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-primary outline-none transition-colors"
-                                                    value={usageProfile.usage_profile.monthly_users.min}
+                                                    disabled={isDeployed}
+                                                    className={`w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-primary outline-none transition-colors ${isDeployed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    value={usageProfile?.usage_profile?.monthly_users?.min || 0}
                                                     onChange={(e) => {
                                                         const val = parseInt(e.target.value) || 0;
-                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, monthly_users: { ...usageProfile.usage_profile.monthly_users, min: val } } });
+                                                        setUsageProfile(prev => ({
+                                                            ...prev,
+                                                            usage_profile: {
+                                                                ...(prev?.usage_profile || {}),
+                                                                monthly_users: {
+                                                                    ...(prev?.usage_profile?.monthly_users || {}),
+                                                                    min: val
+                                                                }
+                                                            }
+                                                        }));
                                                         setIsUsageUserModified(true);
                                                     }}
                                                 />
@@ -1138,11 +1160,21 @@ const WorkspaceCanvas = () => {
                                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Max</span>
                                                 <input
                                                     type="number"
-                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-primary outline-none transition-colors"
-                                                    value={usageProfile.usage_profile.monthly_users.max}
+                                                    disabled={isDeployed}
+                                                    className={`w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-primary outline-none transition-colors ${isDeployed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    value={usageProfile?.usage_profile?.monthly_users?.max || 0}
                                                     onChange={(e) => {
                                                         const val = parseInt(e.target.value) || 0;
-                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, monthly_users: { ...usageProfile.usage_profile.monthly_users, max: val } } });
+                                                        setUsageProfile(prev => ({
+                                                            ...prev,
+                                                            usage_profile: {
+                                                                ...(prev?.usage_profile || {}),
+                                                                monthly_users: {
+                                                                    ...(prev?.usage_profile?.monthly_users || {}),
+                                                                    max: val
+                                                                }
+                                                            }
+                                                        }));
                                                         setIsUsageUserModified(true);
                                                     }}
                                                 />
@@ -1170,11 +1202,21 @@ const WorkspaceCanvas = () => {
                                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Min</span>
                                                 <input
                                                     type="number"
-                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-blue-500 outline-none transition-colors"
-                                                    value={usageProfile.usage_profile.data_transfer_gb.min}
+                                                    disabled={isDeployed}
+                                                    className={`w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-blue-500 outline-none transition-colors ${isDeployed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    value={usageProfile?.usage_profile?.data_transfer_gb?.min || 0}
                                                     onChange={(e) => {
                                                         const val = parseInt(e.target.value) || 0;
-                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, data_transfer_gb: { ...usageProfile.usage_profile.data_transfer_gb, min: val } } });
+                                                        setUsageProfile(prev => ({
+                                                            ...prev,
+                                                            usage_profile: {
+                                                                ...(prev?.usage_profile || {}),
+                                                                data_transfer_gb: {
+                                                                    ...(prev?.usage_profile?.data_transfer_gb || {}),
+                                                                    min: val
+                                                                }
+                                                            }
+                                                        }));
                                                         setIsUsageUserModified(true);
                                                     }}
                                                 />
@@ -1184,11 +1226,21 @@ const WorkspaceCanvas = () => {
                                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Max</span>
                                                 <input
                                                     type="number"
-                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-blue-500 outline-none transition-colors"
-                                                    value={usageProfile.usage_profile.data_transfer_gb.max}
+                                                    disabled={isDeployed}
+                                                    className={`w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-blue-500 outline-none transition-colors ${isDeployed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    value={usageProfile?.usage_profile?.data_transfer_gb?.max || 0}
                                                     onChange={(e) => {
                                                         const val = parseInt(e.target.value) || 0;
-                                                        setUsageProfile({ ...usageProfile, usage_profile: { ...usageProfile.usage_profile, data_transfer_gb: { ...usageProfile.usage_profile.data_transfer_gb, max: val } } });
+                                                        setUsageProfile(prev => ({
+                                                            ...prev,
+                                                            usage_profile: {
+                                                                ...(prev?.usage_profile || {}),
+                                                                data_transfer_gb: {
+                                                                    ...(prev?.usage_profile?.data_transfer_gb || {}),
+                                                                    max: val
+                                                                }
+                                                            }
+                                                        }));
                                                         setIsUsageUserModified(true);
                                                     }}
                                                 />
@@ -1216,11 +1268,21 @@ const WorkspaceCanvas = () => {
                                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Min</span>
                                                 <input
                                                     type="number"
-                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-purple-500 outline-none transition-colors"
-                                                    value={usageProfile.usage_profile.data_storage_gb.min}
+                                                    disabled={isDeployed}
+                                                    className={`w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-purple-500 outline-none transition-colors ${isDeployed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    value={usageProfile?.usage_profile?.data_storage_gb?.min || 0}
                                                     onChange={(e) => {
                                                         const val = parseInt(e.target.value) || 0;
-                                                        setUsageProfile(prev => ({ ...prev, usage_profile: { ...prev.usage_profile, data_storage_gb: { ...prev.usage_profile.data_storage_gb, min: val } } }));
+                                                        setUsageProfile(prev => ({
+                                                            ...prev,
+                                                            usage_profile: {
+                                                                ...(prev?.usage_profile || {}),
+                                                                data_storage_gb: {
+                                                                    ...(prev?.usage_profile?.data_storage_gb || {}),
+                                                                    min: val
+                                                                }
+                                                            }
+                                                        }));
                                                         setIsUsageUserModified(true);
                                                     }}
                                                 />
@@ -1230,11 +1292,21 @@ const WorkspaceCanvas = () => {
                                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">Max</span>
                                                 <input
                                                     type="number"
-                                                    className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-purple-500 outline-none transition-colors"
-                                                    value={usageProfile.usage_profile.data_storage_gb.max}
+                                                    disabled={isDeployed}
+                                                    className={`w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white font-bold focus:border-purple-500 outline-none transition-colors ${isDeployed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    value={usageProfile?.usage_profile?.data_storage_gb?.max || 0}
                                                     onChange={(e) => {
                                                         const val = parseInt(e.target.value) || 0;
-                                                        setUsageProfile(prev => ({ ...prev, usage_profile: { ...prev.usage_profile, data_storage_gb: { ...prev.usage_profile.data_storage_gb, max: val } } }));
+                                                        setUsageProfile(prev => ({
+                                                            ...prev,
+                                                            usage_profile: {
+                                                                ...(prev?.usage_profile || {}),
+                                                                data_storage_gb: {
+                                                                    ...(prev?.usage_profile?.data_storage_gb || {}),
+                                                                    max: val
+                                                                }
+                                                            }
+                                                        }));
                                                         setIsUsageUserModified(true);
                                                     }}
                                                 />
@@ -1255,7 +1327,8 @@ const WorkspaceCanvas = () => {
                                 <div className="flex justify-between items-center pt-8 border-t border-white/5">
                                     <button
                                         onClick={() => setStep('review_spec')} // Go back to architecture
-                                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                        disabled={isDeployed}
+                                        className={`px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium transition-colors flex items-center space-x-2 ${isDeployed ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
                                     >
                                         <span className="material-icons">arrow_back</span>
                                         <span>Back to Architecture</span>
@@ -1266,8 +1339,8 @@ const WorkspaceCanvas = () => {
                                                 setCostProfile('cost_effective');
                                                 handleProceedToCostEstimation();
                                             }}
-                                            disabled={isProcessing}
-                                            className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50"
+                                            disabled={isProcessing || isDeployed}
+                                            className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             <span>Cost Effective</span>
                                             <span className="material-icons">trending_down</span>
@@ -1277,8 +1350,8 @@ const WorkspaceCanvas = () => {
                                                 setCostProfile('high_performance');
                                                 handleProceedToCostEstimation();
                                             }}
-                                            disabled={isProcessing}
-                                            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                                            disabled={isProcessing || isDeployed}
+                                            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             <span>High Performance</span>
                                             <span className="material-icons">speed</span>
@@ -1309,7 +1382,7 @@ const WorkspaceCanvas = () => {
                                             return (
                                                 <div
                                                     key={rank.provider}
-                                                    onClick={() => setSelectedProvider(rank.provider)}
+                                                    onClick={() => setSelectedProvider(rank.provider.toUpperCase())}
                                                     className={`cursor-pointer rounded-2xl p-5 border transition-all relative overflow-hidden flex flex-col justify-between
                                                         ${isSelected
                                                             ? 'bg-primary/10 border-primary shadow-lg shadow-primary/20 scale-[1.02]'
@@ -1385,6 +1458,187 @@ const WorkspaceCanvas = () => {
                                     </div>
                                 </div>
 
+                                {/* 🆕 WHY THIS PROVIDER? - Collapsible Dropdown */}
+                                {(() => {
+                                    const recommended = (costEstimation.rankings || []).find(r => r.recommended);
+                                    const selected = (costEstimation.rankings || []).find(r => r.provider === selectedProvider);
+                                    const target = selected || recommended;
+
+                                    if (!target) return null;
+
+                                    // Provider strengths database
+                                    const providerStrengths = {
+                                        'AWS': {
+                                            strengths: ['Largest service catalog', 'Most mature ML/AI services', 'Best-in-class serverless (Lambda)', 'Global infrastructure'],
+                                            bestFor: ['Enterprise workloads', 'ML/AI applications', 'Scalable architectures', 'Multi-region deployments']
+                                        },
+                                        'GCP': {
+                                            strengths: ['Cost-effective compute', 'Superior Kubernetes (GKE)', 'Advanced analytics', 'Strong ML tooling'],
+                                            bestFor: ['Data analytics', 'Machine learning', 'Container workloads', 'Startups & scale-ups']
+                                        },
+                                        'AZURE': {
+                                            strengths: ['Enterprise integration', 'Hybrid cloud leader', 'Microsoft ecosystem', 'Strong compliance'],
+                                            bestFor: ['Enterprise IT', 'Hybrid deployments', 'Microsoft stack users', 'Regulated industries']
+                                        }
+                                    };
+
+                                    const sortedByPrice = [...(costEstimation.rankings || [])].sort((a, b) => (a.monthly_cost || 0) - (b.monthly_cost || 0));
+                                    const cheapest = sortedByPrice[0];
+                                    const isCheapest = target.provider === cheapest?.provider;
+                                    const providerName = target.provider === 'AZURE' ? 'Azure' : target.provider;
+                                    const targetInfo = providerStrengths[target.provider] || { strengths: [], bestFor: [] };
+
+                                    return (
+                                        <details className="group bg-gradient-to-br from-surface/80 to-surface/40 border border-border rounded-2xl transition-all hover:border-primary/30">
+                                            <summary className="px-6 py-4 cursor-pointer flex items-center justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold
+                                                        ${target.provider === 'AWS' ? 'bg-[#FF9900]/20 text-[#FF9900]' :
+                                                            target.provider === 'GCP' ? 'bg-[#4285F4]/20 text-[#4285F4]' : 'bg-[#0078D4]/20 text-[#0078D4]'}`}>
+                                                        {target.provider === 'AWS' ? 'AWS' : target.provider === 'GCP' ? 'GCP' : 'AZ'}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-white">Why {providerName}?</h4>
+                                                        <p className="text-xs text-gray-400">Click to see why this provider is recommended</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    {target.recommended && (
+                                                        <span className="px-3 py-1 bg-gradient-to-r from-yellow-400 to-amber-500 text-black text-xs font-bold rounded-full">
+                                                            ✓ Best Match
+                                                        </span>
+                                                    )}
+                                                    <span className="material-icons text-gray-400 group-open:rotate-180 transition-transform">expand_more</span>
+                                                </div>
+                                            </summary>
+
+                                            <div className="px-6 pb-6 space-y-4 animate-fade-in">
+                                                {/* Main Explanation */}
+                                                <p className="text-sm text-gray-200 leading-relaxed">
+                                                    Based on your <span className="text-primary font-semibold">{costProfile.replace('_', ' ')}</span> profile
+                                                    and project requirements, <span className="text-white font-semibold">{providerName}</span> is
+                                                    {isCheapest ?
+                                                        ` the most cost-effective option at ${target.formatted_cost || `$${target.monthly_cost?.toFixed(2)}/mo`}` :
+                                                        ` your best choice at ${target.formatted_cost || `$${target.monthly_cost?.toFixed(2)}/mo`}`
+                                                    }.
+                                                </p>
+
+                                                {/* Provider Strengths */}
+                                                {targetInfo.strengths.length > 0 && (
+                                                    <div className="space-y-2">
+                                                        <div className="text-xs text-gray-400 uppercase tracking-wider font-bold">Why {providerName} Works For You</div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {targetInfo.strengths.slice(0, 4).map((strength, idx) => (
+                                                                <div key={idx} className="flex items-center gap-2 text-xs text-gray-300">
+                                                                    <span className="material-icons text-green-400 text-sm">check_circle</span>
+                                                                    {strength}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Best For */}
+                                                {targetInfo.bestFor.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 pt-2">
+                                                        {targetInfo.bestFor.slice(0, 4).map((use, idx) => (
+                                                            <span key={idx} className="px-2 py-1 bg-white/5 text-gray-400 text-[10px] rounded-full border border-white/10">
+                                                                {use}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Score Summary */}
+                                                <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                                                    <div className="flex items-center gap-6 text-xs">
+                                                        <div>
+                                                            <span className="text-gray-400">Overall Score</span>
+                                                            <div className="text-lg font-bold text-primary">{target.score || target.final_score}%</div>
+                                                        </div>
+                                                        {target.cost_score && (
+                                                            <div>
+                                                                <span className="text-gray-400">Cost</span>
+                                                                <div className="text-lg font-bold text-green-400">{target.cost_score}</div>
+                                                            </div>
+                                                        )}
+                                                        {target.performance_score && (
+                                                            <div>
+                                                                <span className="text-gray-400">Performance</span>
+                                                                <div className="text-lg font-bold text-blue-400">{target.performance_score}</div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-[10px] text-gray-500 uppercase">Estimated Monthly</div>
+                                                        <div className="text-xl font-bold text-white">{target.formatted_cost || `$${target.monthly_cost?.toFixed(2)}`}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    );
+                                })()}
+
+                                {/* 🆕 CONFIDENCE DETAILS COLLAPSIBLE */}
+                                <details className="group bg-surface/50 border border-border rounded-2xl transition-all hover:border-primary/30">
+                                    <summary className="px-6 py-4 cursor-pointer flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                            <span className="material-icons text-green-400 text-lg">verified</span>
+                                            <span className="font-bold text-white">Confidence Details</span>
+                                            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-[10px] font-bold">
+                                                {costEstimation.confidence_percentage || Math.round((costEstimation.confidence || 0) * 100)}%
+                                            </span>
+                                        </div>
+                                        <span className="material-icons text-gray-400 group-open:rotate-180 transition-transform">expand_more</span>
+                                    </summary>
+                                    <div className="px-6 pb-6 space-y-4 animate-fade-in">
+                                        <p className="text-sm text-gray-400 leading-relaxed">
+                                            Confidence is based on the <strong className="text-white">"weakest link"</strong> principle — the overall score is capped by the lowest individual factor.
+                                        </p>
+                                        <div className="space-y-3">
+                                            {costEstimation.confidence_breakdown ? (
+                                                <>
+                                                    {/* Usage Completeness */}
+                                                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                                                        <div className="flex items-center space-x-3">
+                                                            <span className="material-icons text-blue-400 text-lg">data_usage</span>
+                                                            <div>
+                                                                <div className="text-sm font-medium text-white">Usage Data Completeness</div>
+                                                                <div className="text-xs text-gray-400">{costEstimation.confidence_breakdown.usage_completeness?.label || 'N/A'}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-lg font-bold text-blue-400">{costEstimation.confidence_breakdown.usage_completeness?.score || 0}%</div>
+                                                    </div>
+                                                    {/* Pricing Method */}
+                                                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                                                        <div className="flex items-center space-x-3">
+                                                            <span className="material-icons text-green-400 text-lg">calculate</span>
+                                                            <div>
+                                                                <div className="text-sm font-medium text-white">Pricing Method Reliability</div>
+                                                                <div className="text-xs text-gray-400">{costEstimation.confidence_breakdown.pricing_method?.label || 'N/A'}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-lg font-bold text-green-400">{costEstimation.confidence_breakdown.pricing_method?.score || 0}%</div>
+                                                    </div>
+                                                    {/* Architecture Completeness */}
+                                                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                                                        <div className="flex items-center space-x-3">
+                                                            <span className="material-icons text-purple-400 text-lg">architecture</span>
+                                                            <div>
+                                                                <div className="text-sm font-medium text-white">Architecture Completeness</div>
+                                                                <div className="text-xs text-gray-400">{costEstimation.confidence_breakdown.architecture_completeness?.label || 'N/A'}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-lg font-bold text-purple-400">{costEstimation.confidence_breakdown.architecture_completeness?.score || 0}%</div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="text-sm text-gray-500 italic">Detailed breakdown not available for this estimate.</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </details>
+
                                 {/* SECTION 5: COST ESTIMATE & CONFIDENCE */}
                                 <div className="space-y-4">
                                     <div className="flex items-center space-x-2">
@@ -1432,8 +1686,8 @@ const WorkspaceCanvas = () => {
                                             {(costEstimation.recommended?.estimate_type || costEstimation.providers?.[selectedProvider]?.estimate_type) && (
                                                 <div className="mt-3 w-full">
                                                     <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${(costEstimation.recommended?.estimate_type === 'exact' || costEstimation.providers?.[selectedProvider]?.estimate_type === 'exact')
-                                                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                                         }`}>
                                                         {(costEstimation.recommended?.estimate_type === 'exact' || costEstimation.providers?.[selectedProvider]?.estimate_type === 'exact')
                                                             ? '✅ Exact (Terraform-based)'
@@ -1554,7 +1808,8 @@ const WorkspaceCanvas = () => {
 
                                             <button
                                                 onClick={() => setStep('usage_review')}
-                                                className="mt-4 w-full py-2 text-gray-400 text-xs font-medium hover:text-white hover:bg-white/5 rounded-lg transition-colors flex items-center justify-center space-x-1"
+                                                disabled={isDeployed}
+                                                className={`mt-4 w-full py-2 text-gray-400 text-xs font-medium rounded-lg transition-colors flex items-center justify-center space-x-1 ${isDeployed ? 'opacity-50 cursor-not-allowed' : 'hover:text-white hover:bg-white/5'}`}
                                             >
                                                 <span className="material-icons text-xs">edit</span>
                                                 <span>Refine assumptions</span>
@@ -1640,7 +1895,8 @@ const WorkspaceCanvas = () => {
                                 <div className="flex justify-between items-center pt-8 border-t border-white/5">
                                     <button
                                         onClick={() => setStep('usage_review')}
-                                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                        disabled={isDeployed}
+                                        className={`px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium transition-colors flex items-center space-x-2 ${isDeployed ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
                                     >
                                         <span className="material-icons">arrow_back</span>
                                         <span>Back to Usage</span>
@@ -1649,10 +1905,11 @@ const WorkspaceCanvas = () => {
                                         onClick={() => {
                                             setStep('architecture');
                                         }}
-                                        className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
+                                        disabled={isDeployed}
+                                        className={`px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 transition-all shadow-lg shadow-primary/20 ${isDeployed ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
                                     >
-                                        <span>Review Architecture</span>
-                                        <span className="material-icons">design_services</span>
+                                        <span>View Diagram</span>
+                                        <span className="material-icons">account_tree</span>
                                     </button>
                                 </div>
                             </div>
@@ -1667,6 +1924,7 @@ const WorkspaceCanvas = () => {
                                 onNext={() => setStep('architecture')}
                                 onBack={() => setStep('cost_estimation')}
                                 onRequirementsCaptured={setRequirementsData}
+                                isDeployed={isDeployed}
                             />
                         )}
 
@@ -1682,8 +1940,16 @@ const WorkspaceCanvas = () => {
                                 requirementsData={requirementsData}
                                 architectureData={architectureData}
                                 onArchitectureDataLoaded={setArchitectureData}
-                                onNext={() => setStep('feedback')}
-                                onBack={() => setStep('requirements')}
+                                onNext={(method) => {
+                                    setDeploymentMethod(method);
+                                    if (method === 'self') {
+                                        setStep('feedback');
+                                    } else {
+                                        toast('One-Click deployment coming soon!', { icon: '🚀' });
+                                    }
+                                }}
+                                onBack={() => setStep('cost_estimation')}
+                                isDeployed={isDeployed}
                             />
                         )}
 
@@ -1697,6 +1963,7 @@ const WorkspaceCanvas = () => {
                                 onFeedbackSubmitted={() => setFeedbackSubmitted(true)}
                                 onNext={() => setStep('terraform_view')}
                                 onBack={() => setStep('architecture')}
+                                isDeployed={isDeployed}
                             />
                         )}
 
@@ -1709,6 +1976,7 @@ const WorkspaceCanvas = () => {
                                 costEstimation={costEstimation}
                                 onComplete={() => setStep('deployment_ready')}
                                 onBack={() => setStep('feedback')}
+                                isDeployed={isDeployed}
                             />
                         )}
 
@@ -1736,13 +2004,13 @@ const WorkspaceCanvas = () => {
                                         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/20 mb-6">
                                             <span className="material-icons text-4xl text-green-400">check_circle</span>
                                         </div>
-                                        <h2 className="text-3xl font-bold text-white">Ready for Deployment</h2>
+                                        <h2 className="text-3xl font-bold text-white">{isDeployed ? 'Deployment Active' : 'Ready for Deployment'}</h2>
                                         <p className="text-gray-400 mt-3 max-w-md">
-                                            Your infrastructure is ready. Choose your deployment method below.
+                                            {isDeployed ? 'Your infrastructure is live and running.' : 'Your infrastructure is ready. Thank you for choosing Cloudiverse!'}
                                         </p>
                                     </div>
 
-                                    <div className="bg-surface border border-border rounded-2xl p-6 max-w-lg w-full">
+                                    <div className="bg-surface border border-border rounded-2xl p-6 max-w-2xl w-full">
                                         <h3 className="text-lg font-bold text-white mb-4">Deployment Summary</h3>
                                         <div className="space-y-3">
                                             {/* Project Name */}
@@ -1794,71 +2062,183 @@ const WorkspaceCanvas = () => {
                                                 <span className="text-gray-400">Cost Profile</span>
                                                 <span className="text-white font-medium capitalize">{costEstimation?.cost_profile?.replace('_', ' ').toLowerCase() || 'standard'}</span>
                                             </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-400">Deployment Mode</span>
+                                                <span className="text-blue-400 font-medium flex items-center space-x-1">
+                                                    <span className="material-icons text-sm">download_done</span>
+                                                    <span>Self Deployment</span>
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Deployment Options */}
-                                    <div className="flex flex-col items-center space-y-4 w-full max-w-2xl">
-                                        <div className="text-sm font-bold text-gray-400 uppercase tracking-wider">Deployment Options</div>
-                                        <div className="flex space-x-4 w-full justify-center">
-                                            {/* Self Deployment */}
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-col items-center space-y-4">
+                                        <button
+                                            onClick={async () => {
+                                                if (isDeployed) {
+                                                    navigate('/workspaces');
+                                                    return;
+                                                }
+                                                try {
+                                                    const token = localStorage.getItem('token');
+                                                    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+                                                    await axios.put(`${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000')}/api/workspaces/${id}/deploy`, {
+                                                        deployment_method: 'self',
+                                                        provider: selectedProvider
+                                                    }, { headers });
+
+                                                    toast.success('🚀 Deployment confirmed! Your project is now active.', { duration: 4000 });
+                                                    setIsDeployed(true);
+                                                    navigate('/workspaces');
+                                                } catch (error) {
+                                                    handleApiError(error, 'Failed to confirm deployment.');
+                                                }
+                                            }}
+                                            className="px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
+                                        >
+                                            <span className="material-icons">{isDeployed ? 'dashboard' : 'check_circle'}</span>
+                                            <span>{isDeployed ? 'Return to Dashboard' : 'Continue to Workspace'}</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setStep('terraform_view')}
+                                            className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                        >
+                                            <span className="material-icons">arrow_back</span>
+                                            <span>Back to Terraform</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        }
+
+                        {/* STEP: DEPLOYMENT SUMMARY (Self-Deployment with Terraform Preview) */}
+                        {step === 'deployment_summary' && (
+                            <div className="space-y-8 animate-fade-in pb-20 max-w-4xl mx-auto">
+                                <div className="text-center space-y-4 mb-8">
+                                    <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <span className="material-icons text-green-400 text-4xl">check_circle</span>
+                                    </div>
+                                    <h2 className="text-3xl font-bold text-white">{isDeployed ? 'Deployment Summary' : 'Deployment Summary'}</h2>
+                                    <p className="text-gray-400 max-w-2xl mx-auto">
+                                        {isDeployed ? 'Your infrastructure has been deployed. Review the Terraform code below.' : 'Your infrastructure is ready for self-deployment. Review the Terraform code below and deploy to your cloud provider.'}
+                                    </p>
+                                </div>
+
+                                {/* Summary Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-surface border border-border rounded-2xl p-5">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                                <span className="material-icons text-primary">cloud</span>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-gray-500 uppercase tracking-widest">Provider</div>
+                                                <div className="text-white font-bold">{selectedProvider || 'AWS'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-surface border border-border rounded-2xl p-5">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                                                <span className="material-icons text-green-400">paid</span>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-gray-500 uppercase tracking-widest">Estimated Cost</div>
+                                                <div className="text-white font-bold">
+                                                    {costEstimation?.rankings?.find(r => r.provider === selectedProvider)?.formatted_cost || '$0/month'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-surface border border-border rounded-2xl p-5">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                                <span className="material-icons text-purple-400">download</span>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-gray-500 uppercase tracking-widest">Method</div>
+                                                <div className="text-white font-bold">Self Deployment</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Terraform Code Preview */}
+                                <details className="group bg-surface border border-border rounded-2xl overflow-hidden" open>
+                                    <summary className="px-6 py-4 cursor-pointer flex items-center justify-between bg-gray-900/50">
+                                        <div className="flex items-center space-x-3">
+                                            <span className="material-icons text-blue-400">code</span>
+                                            <span className="font-bold text-white">Terraform Code</span>
+                                        </div>
+                                        <span className="material-icons text-gray-400 group-open:rotate-180 transition-transform">expand_more</span>
+                                    </summary>
+                                    <div className="p-6 bg-gray-950 border-t border-border">
+                                        <pre className="text-green-400 text-xs overflow-x-auto max-h-96 font-mono leading-relaxed">
+                                            {architectureData?.terraform_code || `# Terraform configuration for ${selectedProvider || 'AWS'}
+# Generated by Cloudiverse
+
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    ${selectedProvider?.toLowerCase() || 'aws'} = {
+      source  = "${selectedProvider === 'GCP' ? 'hashicorp/google' : selectedProvider === 'AZURE' ? 'hashicorp/azurerm' : 'hashicorp/aws'}"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# Your infrastructure modules will be generated here
+# Download the full Terraform bundle from the workspace dashboard
+
+# Services: ${infraSpec?.modules?.map(m => m.service_name || m.type).join(', ') || 'Not specified'}
+`}
+                                        </pre>
+                                        <div className="mt-4 flex justify-end">
                                             <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const token = localStorage.getItem('token');
-                                                        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-                                                        await axios.put(`${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000')}/api/workspaces/${id}/deploy`, {
-                                                            deployment_method: 'self',
-                                                            provider: selectedProvider
-                                                        }, { headers });
-
-                                                        toast.success('🚀 Deployment confirmed! Check your email for details.', { duration: 4000 });
-                                                        navigate('/workspaces');
-                                                    } catch (error) {
-                                                        console.error('Failed to update deployment readiness:', error);
-
-                                                        // User-friendly error messages
-                                                        if (error.response?.status === 401) {
-                                                            toast.error('Session expired. Please log in again.');
-                                                            navigate('/login');
-                                                        } else if (error.response?.status === 404) {
-                                                            toast.error('Workspace not found. It may have been deleted.');
-                                                        } else if (error.response?.status === 500) {
-                                                            toast.error(error.response?.data?.msg || 'Server error. Please try again later.');
-                                                        } else if (!error.response) {
-                                                            toast.error('Network error. Please check your connection.');
-                                                        } else {
-                                                            toast.error('Failed to mark deployment. Please try again.');
-                                                        }
-                                                    }
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(architectureData?.terraform_code || '# Terraform code');
+                                                    toast.success('Terraform code copied to clipboard!');
                                                 }}
-                                                className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                                className="px-4 py-2 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-500/20 transition-colors flex items-center space-x-2"
                                             >
-                                                <span className="material-icons text-lg">download_done</span>
-                                                <div className="flex flex-col items-start">
-                                                    <span className="text-sm font-bold">Self Deployment</span>
-                                                    <span className="text-xs text-gray-400">Download & deploy manually</span>
-                                                </div>
-                                            </button>
-
-                                            {/* One-Click Deployment (Coming Soon) */}
-                                            <button
-                                                disabled
-                                                className="px-6 py-3 bg-gradient-to-r from-primary/10 to-blue-500/10 border border-primary/20 rounded-xl text-primary/50 font-medium cursor-not-allowed flex items-center space-x-2 relative"
-                                            >
-                                                <span className="material-icons text-lg">rocket_launch</span>
-                                                <div className="flex flex-col items-start">
-                                                    <span className="text-sm font-bold flex items-center space-x-2">
-                                                        <span>One-Click Deployment</span>
-                                                        <span className="px-2 py-0.5 bg-primary/20 rounded text-xs text-primary">Coming Soon</span>
-                                                    </span>
-                                                    <span className="text-xs text-gray-500">Automated cloud deployment</span>
-                                                </div>
+                                                <span className="material-icons text-sm">content_copy</span>
+                                                <span>Copy Code</span>
                                             </button>
                                         </div>
                                     </div>
+                                </details>
 
+                                {/* Action Buttons */}
+                                <div className="flex flex-col items-center space-y-4">
+                                    <button
+                                        onClick={async () => {
+                                            if (isDeployed) {
+                                                navigate('/workspaces');
+                                                return;
+                                            }
+                                            try {
+                                                const token = localStorage.getItem('token');
+                                                const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+                                                await axios.put(`${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000')}/api/workspaces/${id}/deploy`, {
+                                                    deployment_method: 'self',
+                                                    provider: selectedProvider
+                                                }, { headers });
+
+                                                toast.success('🚀 Deployment confirmed! Your project is now marked as deployed.', { duration: 4000 });
+                                                setIsDeployed(true);
+                                                navigate('/workspaces');
+                                            } catch (error) {
+                                                handleApiError(error, 'Failed to confirm deployment.');
+                                            }
+                                        }}
+                                        className="px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
+                                    >
+                                        <span className="material-icons">{isDeployed ? 'dashboard' : 'check_circle'}</span>
+                                        <span>{isDeployed ? 'Return to Dashboard' : 'Confirm & Continue to Dashboard'}</span>
+                                    </button>
                                     <button
                                         onClick={() => setStep('terraform_view')}
                                         className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
@@ -1867,8 +2247,8 @@ const WorkspaceCanvas = () => {
                                         <span>Back to Terraform</span>
                                     </button>
                                 </div>
-                            )
-                        }
+                            </div>
+                        )}
                     </div >
                 </div >
             </div >

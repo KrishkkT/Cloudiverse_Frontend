@@ -16,7 +16,8 @@ const ArchitectureStep = ({
     architectureData,
     onArchitectureDataLoaded,
     onNext,
-    onBack
+    onBack,
+    isDeployed
 }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -163,14 +164,14 @@ const ArchitectureStep = ({
                     <span className="material-icons mr-2">design_services</span>
                     Architecture Diagram
                 </h3>
-                
+
                 {/* React Flow Professional Diagram */}
-                <ReactFlowDiagram 
+                <ReactFlowDiagram
                     architectureData={architectureData}
                     provider={selectedProvider}
                     pattern={infraSpec?.architecture_pattern || 'SERVERLESS_WEB_APP'}
                 />
-                
+
                 <div className="text-xs text-gray-500 mt-4 text-center italic">
                     Interactive architecture diagram. Use mouse wheel to zoom, drag to pan. Click "Download PNG" to export.
                 </div>
@@ -182,7 +183,7 @@ const ArchitectureStep = ({
                     <span className="material-icons mr-2">inventory</span>
                     Services Used ({selectedProvider === 'AZURE' ? 'Azure' : selectedProvider})
                 </h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {architectureData?.services?.map((service, index) => (
                         <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10">
@@ -210,7 +211,7 @@ const ArchitectureStep = ({
                         <span className="material-icons mr-2">sticky_note_2</span>
                         Architecture Notes
                     </h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {architectureData.notes.map((note, index) => (
                             <div key={index} className="flex items-start space-x-3">
@@ -222,22 +223,111 @@ const ArchitectureStep = ({
                 </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="flex justify-between items-center pt-8 border-t border-white/5">
-                <button
-                    onClick={onBack}
-                    className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-                >
-                    <span className="material-icons">arrow_back</span>
-                    <span>Back to Cost</span>
-                </button>
-                <button
-                    onClick={onNext}
-                    className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-                >
-                    <span>Confirm Architecture</span>
-                    <span className="material-icons">arrow_forward</span>
-                </button>
+            {/* Deployment Choice Buttons */}
+            <div className="flex flex-col space-y-6 pt-8 border-t border-white/5">
+                <div className="text-center">
+                    <h3 className="text-lg font-bold text-white mb-2">Choose Your Deployment Method</h3>
+                    <p className="text-sm text-gray-400">How would you like to deploy this infrastructure?</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Self Deployment Option */}
+                    {isDeployed ? (
+                        <div className="p-6 bg-surface border border-border rounded-2xl opacity-60 cursor-not-allowed">
+                            <div className="flex items-center space-x-4 mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                                    <span className="material-icons text-blue-400 text-2xl">visibility</span>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-white">View Configuration</h4>
+                                    <p className="text-xs text-gray-400">View Terraform & Setup</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-400">
+                                Review the generated Terraform code and deployment details.
+                            </p>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => onNext('self')}
+                            className="p-6 bg-surface border border-border rounded-2xl hover:border-primary/50 transition-all group text-left"
+                        >
+                            <div className="flex items-center space-x-4 mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                                    <span className="material-icons text-blue-400 text-2xl group-hover:text-primary transition-colors">download_done</span>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-white group-hover:text-primary transition-colors">Self Deployment</h4>
+                                    <p className="text-xs text-gray-400">Download & deploy manually</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-400">
+                                Get the Terraform code and deploy it yourself using your own credentials and workflow.
+                            </p>
+                        </button>
+                    )}
+
+                    {/* One-Click Deployment Option */}
+                    {isDeployed ? (
+                        <div className="p-6 bg-surface border border-border rounded-2xl opacity-40 cursor-not-allowed text-left relative">
+                            <div className="absolute top-3 right-3 px-2 py-1 bg-gradient-to-r from-gray-600 to-gray-700 text-white text-[10px] font-bold rounded-full">
+                                DISABLED
+                            </div>
+                            <div className="flex items-center space-x-4 mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                                    <span className="material-icons text-green-400 text-2xl">rocket_launch</span>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-white">One-Click Deploy</h4>
+                                    <p className="text-xs text-gray-400">Automated cloud deployment</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-400">
+                                We handle the deployment for you. Just connect your cloud account and we'll do the rest.
+                            </p>
+                            <div className="mt-4 flex items-center text-xs text-gray-500">
+                                <span className="material-icons text-sm mr-1">check</span>
+                                Zero DevOps required
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => !isDeployed && onNext('oneclick')}
+                            disabled={isDeployed}
+                            className={`p-6 bg-surface border border-border rounded-2xl transition-all group text-left relative hover:border-green-500/50`}
+                        >
+                            <div className="absolute top-3 right-3 px-2 py-1 bg-gradient-to-r from-green-400 to-emerald-500 text-black text-[10px] font-bold rounded-full">
+                                COMING SOON
+                            </div>
+                            <div className="flex items-center space-x-4 mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                                    <span className="material-icons text-green-400 text-2xl">rocket_launch</span>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-white group-hover:text-green-400 transition-colors">One-Click Deploy</h4>
+                                    <p className="text-xs text-gray-400">Automated cloud deployment</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-400">
+                                We handle the deployment for you. Just connect your cloud account and we'll do the rest.
+                            </p>
+                            <div className="mt-4 flex items-center text-xs text-gray-500">
+                                <span className="material-icons text-sm mr-1">check</span>
+                                Zero DevOps required
+                            </div>
+                        </button>
+                    )}
+                </div>
+
+                {!isDeployed && (
+                    <button
+                        onClick={onBack}
+                        className="mx-auto px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                    >
+                        <span className="material-icons">arrow_back</span>
+                        <span>Back to Cost Estimation</span>
+                    </button>
+                )}
             </div>
         </div>
     );

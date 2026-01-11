@@ -38,30 +38,33 @@ const CATEGORY_COLORS = {
 const SERVICE_ICONS = {
   client: '👥',
   cdn: '🌐',
-  load_balancer: '⚖️',
-  api_gateway: '🚪',
-  websocket_gateway: '🔌',
-  app_compute: '⚙️',
-  serverless_compute: '⚡',
-  compute_container: '📦',
-  compute_vm: '🖥️',
-  batch_compute: '📊',
-  ml_inference_service: '🤖',
-  relational_database: '🗄️',
-  nosql_database: '📑',
-  analytical_database: '📈',
+  loadbalancer: '⚖️', // Changed from load_balancer
+  apigateway: '🚪', // Changed from api_gateway
+  websocketgateway: '🔌', // Changed from websocket_gateway
+  appcompute: '⚙️', // Changed from app_compute
+  computeserverless: '⚡', // Changed from serverless_compute
+  computecontainer: '📦', // Changed from compute_container
+  computevm: '🖥️', // Changed from compute_vm
+  batchcompute: '📊', // Changed from batch_compute
+  mlinferenceservice: '🤖', // Changed from ml_inference_service
+  relationaldatabase: '🗄️', // Changed from relational_database
+  nosqldatabase: '📉', // Changed from nosql_database, icon changed
+  analyticaldatabase: '📈', // Changed from analytical_database
   cache: '⚡',
-  object_storage: '📁',
-  block_storage: '💾',
-  identity_auth: '🔐',
-  message_queue: '📬',
-  messaging_queue: '📬',
-  event_bus: '🚌',
-  logging: '📝',
+  objectstorage: '📁', // Changed from object_storage
+  blockstorage: '💾', // Changed from block_storage
+  auth: '🔐', // New entry
+  identityauth: '🔐', // Changed from identity_auth
+  messagequeue: '📬', // Changed from message_queue and messaging_queue
+  eventstreaming: '📡', // New entry
+  eventbus: '🚌', // Kept event_bus as eventbus
+  etlorchestration: '⚙️', // New entry
+  datawarehouse: '🏛️', // New entry
+  logging: '📜', // Changed from logging, icon changed
   monitoring: '📊',
-  payment_gateway: '💳',
-  push_notification_service: '🔔',
-  secrets_management: '🔑',
+  paymentgateway: '💳', // Changed from payment_gateway
+  pushnotificationservice: '🔔', // Changed from push_notification_service
+  secretsmanagement: '🔑', // Changed from secrets_management
   networking: '🔗'
 };
 
@@ -188,6 +191,12 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
+
+  // 🔥 CRITICAL: Update internal state when layouted elements change (e.g. provider switch)
+  React.useEffect(() => {
+    setNodes(layoutedNodes);
+    setEdges(layoutedEdges);
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
   // Download diagram as PNG
   const downloadDiagram = useCallback(() => {

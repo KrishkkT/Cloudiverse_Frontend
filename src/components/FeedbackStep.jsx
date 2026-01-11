@@ -11,16 +11,23 @@ const FeedbackStep = ({
     onNext,
     onBack,
     costIntent,
-    onFeedbackSubmitted
+    onFeedbackSubmitted,
+    isDeployed
 }) => {
     const [feedback, setFeedback] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async () => {
-        if (!feedback) {
+        if (!feedback && !isDeployed) {
             toast.error('Please select an option');
             return;
         }
+
+        if (isDeployed) {
+            onNext();
+            return;
+        }
+
 
         setIsSubmitting(true);
         try {
@@ -30,7 +37,7 @@ const FeedbackStep = ({
 
             // Find selected profile more reliably
             let selectedProfile = 'cost_effective'; // default to cost_effective since that's the default state
-            
+
             // Try to get profile from costEstimation if available
             if (costEstimation.cost_profile) {
                 selectedProfile = costEstimation.cost_profile;
@@ -40,7 +47,7 @@ const FeedbackStep = ({
                 // Look for the profile that matches the selected provider's data
                 if (costEstimation.scenarios) {
                     const displayedCost = providerDetails?.total_monthly_cost;
-                    
+
                     // Look through all profiles to find the one matching the selected provider
                     for (const [profileName, providers] of Object.entries(costEstimation.scenarios)) {
                         const providerData = providers[selectedProvider];
@@ -54,7 +61,7 @@ const FeedbackStep = ({
                     }
                 }
             }
-            
+
             // Normalize profile name to expected format
             if (selectedProfile === 'costeffective' || selectedProfile === 'cost_effective' || selectedProfile === 'costEffective') {
                 selectedProfile = 'cost_effective';
@@ -66,10 +73,10 @@ const FeedbackStep = ({
                 // Default fallback
                 selectedProfile = 'cost_effective';
             }
-                        
+
             // Ensure API_BASE doesn't have trailing slash to avoid double slashes
             const normalizedApiBase = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE;
-                        
+
             try {
                 await axios.post(`${normalizedApiBase}/feedback`, {
                     workspace_id: workspaceId,
@@ -91,7 +98,7 @@ const FeedbackStep = ({
                     onFeedbackSubmitted();
                 }
             }
-                        
+
             onNext();
         } catch (error) {
             console.error('Feedback submission error:', error);
@@ -112,49 +119,49 @@ const FeedbackStep = ({
 
             <div className="bg-surface border border-border rounded-2xl p-8">
                 <h3 className="text-lg font-medium text-white mb-6 text-center">
-                    Is this cost estimate within your expected budget?
+                    {isDeployed ? 'Cost estimate feedback provided.' : 'Is this cost estimate within your expected budget?'}
                 </h3>
 
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
-                        onClick={() => setFeedback('within_budget')}
+                        onClick={() => !isDeployed && setFeedback('within_budget')}
                         className={`p-4 rounded-xl border flex items-center justify-between transition-all ${feedback === 'within_budget'
-                                ? 'bg-green-500/10 border-green-500 text-white'
-                                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                            }`}
+                            ? 'bg-green-500/10 border-green-500 text-white'
+                            : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                            } ${isDeployed ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                         <span className="font-medium">Yes, it looks reasonable</span>
                         {feedback === 'within_budget' && <span className="material-icons text-green-500">check_circle</span>}
                     </button>
 
                     <button
-                        onClick={() => setFeedback('slightly_high')}
+                        onClick={() => !isDeployed && setFeedback('slightly_high')}
                         className={`p-4 rounded-xl border flex items-center justify-between transition-all ${feedback === 'slightly_high'
-                                ? 'bg-yellow-500/10 border-yellow-500 text-white'
-                                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                            }`}
+                            ? 'bg-yellow-500/10 border-yellow-500 text-white'
+                            : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                            } ${isDeployed ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                         <span className="font-medium">It's a bit higher than expected</span>
                         {feedback === 'slightly_high' && <span className="material-icons text-yellow-500">check_circle</span>}
                     </button>
 
                     <button
-                        onClick={() => setFeedback('too_high')}
+                        onClick={() => !isDeployed && setFeedback('too_high')}
                         className={`p-4 rounded-xl border flex items-center justify-between transition-all ${feedback === 'too_high'
-                                ? 'bg-red-500/10 border-red-500 text-white'
-                                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                            }`}
+                            ? 'bg-red-500/10 border-red-500 text-white'
+                            : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                            } ${isDeployed ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                         <span className="font-medium">No, it's significantly too high</span>
                         {feedback === 'too_high' && <span className="material-icons text-red-500">check_circle</span>}
                     </button>
 
                     <button
-                        onClick={() => setFeedback('unknown')}
+                        onClick={() => !isDeployed && setFeedback('unknown')}
                         className={`p-4 rounded-xl border flex items-center justify-between transition-all ${feedback === 'unknown'
-                                ? 'bg-blue-500/10 border-blue-500 text-white'
-                                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                            }`}
+                            ? 'bg-blue-500/10 border-blue-500 text-white'
+                            : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                            } ${isDeployed ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                         <span className="font-medium">I'm not sure / I have no baseline</span>
                         {feedback === 'unknown' && <span className="material-icons text-blue-500">check_circle</span>}
@@ -162,32 +169,34 @@ const FeedbackStep = ({
                 </div>
             </div>
 
-            <div className="flex justify-between items-center pt-8 border-t border-white/5">
-                <button
-                    onClick={onBack}
-                    className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-                >
-                    <span className="material-icons">arrow_back</span>
-                    <span>Back to Estimate</span>
-                </button>
-                <button
-                    onClick={handleSubmit}
-                    disabled={!feedback || isSubmitting}
-                    className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isSubmitting ? (
-                        <>
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            <span>Processing...</span>
-                        </>
-                    ) : (
-                        <>
-                            <span>Generate Terraform</span>
-                            <span className="material-icons">code</span>
-                        </>
-                    )}
-                </button>
-            </div>
+            {!isDeployed && (
+                <div className="flex justify-between items-center pt-8 border-t border-white/5">
+                    <button
+                        onClick={onBack}
+                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                    >
+                        <span className="material-icons">arrow_back</span>
+                        <span>Back to Estimate</span>
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={(!feedback && !isDeployed) || isSubmitting}
+                        className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <span>Processing...</span>
+                            </>
+                        ) : (
+                            <>
+                                <span>{isDeployed ? 'View Terraform' : 'Generate Terraform'}</span>
+                                <span className="material-icons">code</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

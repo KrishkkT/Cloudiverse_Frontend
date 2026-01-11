@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
-const RequirementsStep = ({ 
-  workspaceId, 
-  infraSpec, 
-  costEstimation, 
-  onNext, 
+const RequirementsStep = ({
+  workspaceId,
+  infraSpec,
+  costEstimation,
+  onNext,
   onBack,
-  onRequirementsCaptured
+  onRequirementsCaptured,
+  isDeployed
 }) => {
   const [requirements, setRequirements] = useState({
     // Non-functional requirements
@@ -66,7 +67,7 @@ const RequirementsStep = ({
       const newCompliance = checked
         ? [...prev.nfr.compliance, complianceType]
         : prev.nfr.compliance.filter(c => c !== complianceType);
-      
+
       return {
         ...prev,
         nfr: {
@@ -113,7 +114,7 @@ const RequirementsStep = ({
         console.error('Requirements data is empty');
         return;
       }
-      
+
       if (onRequirementsCaptured) {
         onRequirementsCaptured(requirements);
       }
@@ -145,11 +146,10 @@ const RequirementsStep = ({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
-              activeTab === tab.id
-                ? 'bg-primary/20 text-white border border-primary/30'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${activeTab === tab.id
+              ? 'bg-primary/20 text-white border border-primary/30'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
           >
             <span className="material-icons text-sm">{tab.icon}</span>
             <span>{tab.label}</span>
@@ -158,11 +158,11 @@ const RequirementsStep = ({
       </div>
 
       {/* Tab Content */}
-      <div className="bg-surface border border-border rounded-2xl p-6">
+      <fieldset disabled={isDeployed} className="bg-surface border border-border rounded-2xl p-6 transition-opacity duration-300 disabled:opacity-60">
         {activeTab === 'region' && (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-white mb-6">Region Configuration</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">Primary Region</label>
@@ -181,7 +181,7 @@ const RequirementsStep = ({
                   <option value="sa-east-1">South America (São Paulo)</option>
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">Secondary Region (Optional)</label>
                 <select
@@ -222,7 +222,7 @@ const RequirementsStep = ({
                   <div>
                     <h4 className="font-bold text-amber-200 mb-1">Data Residency Notice</h4>
                     <p className="text-sm text-amber-200/80">
-                      GDPR compliance requires data to be stored within EU regions. 
+                      GDPR compliance requires data to be stored within EU regions.
                       Primary region must be EU-based.
                     </p>
                   </div>
@@ -235,12 +235,12 @@ const RequirementsStep = ({
         {activeTab === 'data' && (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-white mb-6">Data Classification & Retention</h3>
-            
+
             <div className="space-y-6">
               <div>
                 <h4 className="font-semibold text-white mb-4">Data Classification</h4>
                 <p className="text-sm text-gray-400 mb-4">Classify your data types to apply appropriate security measures</p>
-                
+
                 <div className="space-y-4">
                   {[
                     { type: 'user_profiles', label: 'User Profiles', desc: 'Names, emails, personal preferences, account details' },
@@ -280,7 +280,7 @@ const RequirementsStep = ({
               <div>
                 <h4 className="font-semibold text-white mb-4">Data Retention</h4>
                 <p className="text-sm text-gray-400 mb-4">Define how long different data types should be retained</p>
-                
+
                 <div className="space-y-4">
                   {[
                     { type: 'user_profiles', label: 'User Profiles' },
@@ -316,7 +316,7 @@ const RequirementsStep = ({
         {activeTab === 'deployment' && (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-white mb-6">Deployment Strategy</h3>
-            
+
             <div className="space-y-6">
               <div>
                 <h4 className="font-semibold text-white mb-4">Deployment Strategy</h4>
@@ -327,14 +327,13 @@ const RequirementsStep = ({
                     { value: 'canary', label: 'Canary', desc: 'Test with small traffic before full rollout' },
                     { value: 'batch', label: 'Batch', desc: 'All instances updated at once, fastest but risky' }
                   ].map(strategy => (
-                    <div 
+                    <div
                       key={strategy.value}
-                      onClick={() => handleDeploymentStrategyChange(strategy.value)}
-                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                        requirements.deployment_strategy === strategy.value
-                          ? 'border-primary bg-primary/10 text-white'
-                          : 'border-white/10 text-gray-400 hover:border-white/20 hover:bg-white/5'
-                      }`}
+                      onClick={() => !isDeployed && handleDeploymentStrategyChange(strategy.value)}
+                      className={`p-4 rounded-xl border transition-all ${isDeployed ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${requirements.deployment_strategy === strategy.value
+                        ? 'border-primary bg-primary/10 text-white'
+                        : 'border-white/10 text-gray-400 hover:border-white/20 hover:bg-white/5'
+                        }`}
                     >
                       <div className="font-medium">{strategy.label}</div>
                       <div className="text-xs opacity-70 mt-1">{strategy.desc}</div>
@@ -365,8 +364,8 @@ const RequirementsStep = ({
                   <div>
                     <h4 className="font-bold text-blue-200 mb-1">Strategy Recommendations</h4>
                     <p className="text-sm text-blue-200/80">
-                      • High availability systems: Blue/Green or Canary<br/>
-                      • Development systems: Rolling<br/>
+                      • High availability systems: Blue/Green or Canary<br />
+                      • Development systems: Rolling<br />
                       • Batch: Only for non-critical systems
                     </p>
                   </div>
@@ -379,7 +378,7 @@ const RequirementsStep = ({
         {activeTab === 'observability' && (
           <div className="space-y-6">
             <h3 className="text-xl font-bold text-white mb-6">Observability & Monitoring</h3>
-            
+
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 bg-surface/30 rounded-xl border border-border">
                 <div>
@@ -394,16 +393,14 @@ const RequirementsStep = ({
                     className="sr-only"
                     id="logs-toggle"
                   />
-                  <label 
+                  <label
                     htmlFor="logs-toggle"
-                    className={`block w-12 h-6 rounded-full cursor-pointer transition-colors ${
-                      requirements.observability.logs ? 'bg-primary' : 'bg-gray-600'
-                    }`}
+                    className={`block w-12 h-6 rounded-full cursor-pointer transition-colors ${requirements.observability.logs ? 'bg-primary' : 'bg-gray-600'
+                      }`}
                   >
                     <span
-                      className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${
-                        requirements.observability.logs ? 'transform translate-x-6' : ''
-                      }`}
+                      className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${requirements.observability.logs ? 'transform translate-x-6' : ''
+                        }`}
                     ></span>
                   </label>
                 </div>
@@ -422,16 +419,14 @@ const RequirementsStep = ({
                     className="sr-only"
                     id="metrics-toggle"
                   />
-                  <label 
+                  <label
                     htmlFor="metrics-toggle"
-                    className={`block w-12 h-6 rounded-full cursor-pointer transition-colors ${
-                      requirements.observability.metrics ? 'bg-primary' : 'bg-gray-600'
-                    }`}
+                    className={`block w-12 h-6 rounded-full cursor-pointer transition-colors ${requirements.observability.metrics ? 'bg-primary' : 'bg-gray-600'
+                      }`}
                   >
                     <span
-                      className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${
-                        requirements.observability.metrics ? 'transform translate-x-6' : ''
-                      }`}
+                      className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${requirements.observability.metrics ? 'transform translate-x-6' : ''
+                        }`}
                     ></span>
                   </label>
                 </div>
@@ -450,16 +445,14 @@ const RequirementsStep = ({
                     className="sr-only"
                     id="alerts-toggle"
                   />
-                  <label 
+                  <label
                     htmlFor="alerts-toggle"
-                    className={`block w-12 h-6 rounded-full cursor-pointer transition-colors ${
-                      requirements.observability.alerts ? 'bg-primary' : 'bg-gray-600'
-                    }`}
+                    className={`block w-12 h-6 rounded-full cursor-pointer transition-colors ${requirements.observability.alerts ? 'bg-primary' : 'bg-gray-600'
+                      }`}
                   >
                     <span
-                      className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${
-                        requirements.observability.alerts ? 'transform translate-x-6' : ''
-                      }`}
+                      className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${requirements.observability.alerts ? 'transform translate-x-6' : ''
+                        }`}
                     ></span>
                   </label>
                 </div>
@@ -472,7 +465,7 @@ const RequirementsStep = ({
                 <div>
                   <h4 className="font-bold text-green-200 mb-1">Observability Benefits</h4>
                   <p className="text-sm text-green-200/80">
-                    Monitoring and logging are essential for production systems. 
+                    Monitoring and logging are essential for production systems.
                     They help identify issues before they impact users.
                   </p>
                 </div>
@@ -480,25 +473,26 @@ const RequirementsStep = ({
             </div>
           </div>
         )}
-      </div>
+      </fieldset>
 
-      {/* Action Buttons */}
-      <div className="flex justify-between items-center pt-8 border-t border-white/5">
-        <button
-          onClick={onBack}
-          className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-        >
-          <span className="material-icons">arrow_back</span>
-          <span>Back</span>
-        </button>
-        <button
-          onClick={handleSubmit}
-          className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-        >
-          <span>Continue to Architecture</span>
-          <span className="material-icons">arrow_forward</span>
-        </button>
-      </div>
+      {!isDeployed && (
+        <div className="flex justify-between items-center pt-8 border-t border-white/5">
+          <button
+            onClick={onBack}
+            className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+          >
+            <span className="material-icons">arrow_back</span>
+            <span>Back</span>
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
+          >
+            <span>Continue to Architecture</span>
+            <span className="material-icons">arrow_forward</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
