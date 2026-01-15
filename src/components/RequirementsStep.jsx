@@ -21,7 +21,7 @@ const RequirementsStep = ({
     },
     // Region selection
     region: {
-      primary_region: 'us-east-1',
+      primary_region: 'india',
       secondary_region: '',
       multi_region: false
     },

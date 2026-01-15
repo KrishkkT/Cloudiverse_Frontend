@@ -5,6 +5,7 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   useEdgesState,
+  getRectOfNodes,
 } from 'reactflow';
 import dagre from 'dagre';
 import { toPng } from 'html-to-image';
@@ -38,49 +39,48 @@ const CATEGORY_COLORS = {
 const SERVICE_ICONS = {
   client: '👥',
   cdn: '🌐',
-  loadbalancer: '⚖️', // Changed from load_balancer
-  apigateway: '🚪', // Changed from api_gateway
-  websocketgateway: '🔌', // Changed from websocket_gateway
-  appcompute: '⚙️', // Changed from app_compute
-  computeserverless: '⚡', // Changed from serverless_compute
-  computecontainer: '📦', // Changed from compute_container
-  computevm: '🖥️', // Changed from compute_vm
-  batchcompute: '📊', // Changed from batch_compute
-  mlinferenceservice: '🤖', // Changed from ml_inference_service
-  relationaldatabase: '🗄️', // Changed from relational_database
-  nosqldatabase: '📉', // Changed from nosql_database, icon changed
-  analyticaldatabase: '📈', // Changed from analytical_database
+  loadbalancer: '⚖️',
+  apigateway: '🚪',
+  websocketgateway: '🔌',
+  appcompute: '⚙️',
+  computeserverless: '⚡',
+  computecontainer: '📦',
+  computevm: '🖥️',
+  batchcompute: '📊',
+  mlinferenceservice: '🤖',
+  relationaldatabase: '🗄️',
+  nosqldatabase: '📉',
+  analyticaldatabase: '📈',
   cache: '⚡',
-  objectstorage: '📁', // Changed from object_storage
-  blockstorage: '💾', // Changed from block_storage
-  auth: '🔐', // New entry
-  identityauth: '🔐', // Changed from identity_auth
-  messagequeue: '📬', // Changed from message_queue and messaging_queue
-  eventstreaming: '📡', // New entry
-  eventbus: '🚌', // Kept event_bus as eventbus
-  etlorchestration: '⚙️', // New entry
-  datawarehouse: '🏛️', // New entry
-  logging: '📜', // Changed from logging, icon changed
+  objectstorage: '📁',
+  blockstorage: '💾',
+  auth: '🔐',
+  identityauth: '🔐',
+  messagequeue: '📬',
+  eventstreaming: '📡',
+  eventbus: '🚌',
+  etlorchestration: '⚙️',
+  datawarehouse: '🏛️',
+  logging: '📜',
   monitoring: '📊',
-  paymentgateway: '💳', // Changed from payment_gateway
-  pushnotificationservice: '🔔', // Changed from push_notification_service
-  secretsmanagement: '🔑', // Changed from secrets_management
+  paymentgateway: '💳',
+  pushnotificationservice: '🔔',
+  secretsmanagement: '🔑',
+  waf: '🛡️',
   networking: '🔗'
 };
 
 /**
  * Apply Dagre auto-layout algorithm
- * This eliminates manual positioning math
  */
 function getLayoutedElements(nodes, edges, direction = 'LR') {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  // LR = Left to Right, TB = Top to Bottom
   dagreGraph.setGraph({
     rankdir: direction,
-    nodesep: 100,  // Horizontal spacing
-    ranksep: 150,  // Vertical spacing
+    nodesep: 150,
+    ranksep: 300,
     marginx: 50,
     marginy: 50
   });
@@ -156,7 +156,7 @@ function convertToReactFlowFormat(architectureData) {
         justifyContent: 'center',
         boxShadow: `0 4px 12px ${colors.border}40`,
       },
-      draggable: false, // Lock nodes (users shouldn't break layout)
+      draggable: false,
     };
   });
 
@@ -168,22 +168,24 @@ function convertToReactFlowFormat(architectureData) {
     label: edge.label || '',
     type: 'smoothstep',
     animated: true,
-    style: { stroke: '#6B7280', strokeWidth: 2 },
-    labelStyle: { fill: '#9CA3AF', fontSize: 11, fontWeight: 600 },
-    labelBgStyle: { fill: '#1F2937', fillOpacity: 0.8 },
+    labelShowBg: true,
+    labelBgPadding: [8, 4],
+    labelBgBorderRadius: 6,
+    pathOptions: { borderRadius: 20 },
+    style: { stroke: '#4B5563', strokeWidth: 2 },
+    labelStyle: { fill: '#E5E7EB', fontSize: 10, fontWeight: 500, letterSpacing: '0.05em' },
+    labelBgStyle: { fill: '#111827', stroke: '#374151', strokeWidth: 1, fillOpacity: 0.95 },
   }));
 
   return { nodes, edges };
 }
 
 const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
-  // 🔥 FIX: Include provider in dependency so diagram updates when provider changes
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => convertToReactFlowFormat(architectureData),
-    [architectureData, provider]  // Provider change triggers re-render
+    [architectureData, provider]
   );
 
-  // Apply Dagre layout
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
     () => getLayoutedElements(initialNodes, initialEdges),
     [initialNodes, initialEdges]
@@ -192,28 +194,42 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
 
-  // 🔥 CRITICAL: Update internal state when layouted elements change (e.g. provider switch)
   React.useEffect(() => {
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
-  // Download diagram as PNG
+  // Download diagram as PNG (Full Graph Capture)
   const downloadDiagram = useCallback(() => {
-    const diagramElement = document.querySelector('.react-flow');
-    if (!diagramElement) {
-      console.error('Diagram element not found');
+    // 1. Calculate bounds of all nodes
+    const nodesBounds = getRectOfNodes(nodes);
+
+    // 2. Define image dimensions (content + padding)
+    const imageWidth = nodesBounds.width + 100;
+    const imageHeight = nodesBounds.height + 100;
+
+    // 3. Compute transform to center the graph at (50, 50)
+    const transformX = -nodesBounds.x + 50;
+    const transformY = -nodesBounds.y + 50;
+    const transform = `translate(${transformX}px, ${transformY}px) scale(1)`;
+
+    const viewportElem = document.querySelector('.react-flow__viewport');
+
+    if (!viewportElem) {
+      console.error('Viewport element not found');
       return;
     }
 
-    toPng(diagramElement, {
-      backgroundColor: '#0F172A',
-      width: diagramElement.offsetWidth,
-      height: diagramElement.offsetHeight,
+    toPng(viewportElem, {
+      backgroundColor: '#0F172A', // Force background
+      width: imageWidth,
+      height: imageHeight,
       style: {
-        width: `${diagramElement.offsetWidth}px`,
-        height: `${diagramElement.offsetHeight}px`,
+        width: `${imageWidth}px`,
+        height: `${imageHeight}px`,
+        transform: transform,
       },
+      pixelRatio: 3, // High quality
     })
       .then((dataUrl) => {
         const link = document.createElement('a');
@@ -223,9 +239,9 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
       })
       .catch((err) => {
         console.error('Failed to export diagram:', err);
-        alert('Failed to export diagram. Please try again.');
+        alert('Failed to export diagram: ' + err.message);
       });
-  }, [provider, pattern]);
+  }, [nodes, provider, pattern]);
 
   if (nodes.length === 0) {
     return (
@@ -247,12 +263,12 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
           className="px-4 py-2 bg-primary/20 border border-primary/40 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center space-x-2 text-sm font-semibold"
         >
           <span className="material-icons text-lg">download</span>
-          <span>Download PNG</span>
+          <span>Download PNG (Full)</span>
         </button>
       </div>
 
       {/* React Flow Diagram */}
-      <div className="bg-[#0F172A] rounded-xl border border-white/10 overflow-hidden" style={{ height: '600px' }}>
+      <div className="relative bg-[#0F172A] rounded-xl border border-white/10 overflow-hidden" style={{ height: '600px' }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -286,27 +302,9 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
             maskColor="#0F172A99"
             style={{
               background: '#1F2937',
-              border: '1px solid #374151',
-              borderRadius: '8px',
             }}
           />
         </ReactFlow>
-      </div>
-
-      {/* Legend */}
-      <div className="bg-surface border border-border rounded-xl p-4">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Service Categories</h4>
-        <div className="flex flex-wrap gap-3">
-          {Object.entries(CATEGORY_COLORS).map(([category, colors]) => (
-            <div key={category} className="flex items-center space-x-2">
-              <div
-                className="w-4 h-4 rounded"
-                style={{ background: colors.bg, border: `2px solid ${colors.border}` }}
-              />
-              <span className="text-xs text-gray-300 capitalize">{category}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

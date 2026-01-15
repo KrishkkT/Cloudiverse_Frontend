@@ -186,17 +186,27 @@ const ArchitectureStep = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {architectureData?.services?.map((service, index) => (
-                        <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10">
+                        <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-colors group">
                             <div className="flex items-start justify-between">
-                                <div>
-                                    <h4 className="font-bold text-white">{service.name}</h4>
-                                    <p className="text-sm text-gray-400 mt-1">{service.description}</p>
-                                    <div className="text-xs text-gray-500 mt-2 capitalize">
-                                        {service.category} service
+                                <div className="flex-1">
+                                    <div className="flex items-center space-x-2">
+                                        <h4 className="font-bold text-white text-lg">
+                                            {service.pretty_name || service.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                        </h4>
+                                        <a
+                                            href={`/docs?section=cloud-services&provider=${selectedProvider?.toLowerCase()}&service=${service.name.toLowerCase()}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-gray-500 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="View Documentation"
+                                        >
+                                            <span className="material-icons text-sm">info</span>
+                                        </a>
                                     </div>
-                                </div>
-                                <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full capitalize">
-                                    {service.type?.replace('_', ' ')}
+                                    <p className="text-sm text-gray-400 mt-1">{service.description}</p>
+                                    <div className="text-xs text-gray-500 mt-2 capitalize font-mono">
+                                        {service.category}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -213,7 +223,7 @@ const ArchitectureStep = ({
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {architectureData.notes.map((note, index) => (
+                        {architectureData.notes.slice(0, 4).map((note, index) => (
                             <div key={index} className="flex items-start space-x-3">
                                 <span className="material-icons text-primary text-sm mt-0.5">info</span>
                                 <p className="text-sm text-gray-300">{note}</p>

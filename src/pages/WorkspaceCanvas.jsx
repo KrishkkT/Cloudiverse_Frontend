@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 import FeedbackStep from '../components/FeedbackStep';
 import TerraformStep from '../components/TerraformStep';
@@ -522,6 +522,34 @@ const WorkspaceCanvas = () => {
 
 
 
+
+    // 🔥 NEW: Auto-Deployment Handler (Triggered by Terraform Load)
+    // 🔥 NEW: Auto-Deployment Handler (Triggered by Terraform Load)
+    const handleAutoDeploy = async () => {
+        if (isDeployed) return;
+
+        // Optimistic UI Update: Show "Live" toggle immediately
+        setIsDeployed(true);
+        toast.success('🚀 Project marked as Live!', { duration: 3000 });
+
+        try {
+            console.log('[DEPLOY] Auto-deploying workspace...');
+            const token = localStorage.getItem('token');
+            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+            await axios.put(`${API_BASE}/api/workspaces/${id}/deploy`, {
+                deployment_method: 'self',
+                provider: selectedProvider
+            }, { headers });
+
+        } catch (error) {
+            console.error('[DEPLOY ERROR]', error);
+            // Revert on critical failure (optional, but safer to keep it "Live" for UX if just a network blip)
+            // setIsDeployed(false); 
+            // handleApiError(error, "Failed to sync deployment status.");
+        }
+    };
+
     return (
         <div className="flex h-screen bg-background text-white font-inter overflow-hidden relative selection:bg-primary/30">
             <Toaster position="top-right" toastOptions={{
@@ -658,7 +686,7 @@ const WorkspaceCanvas = () => {
                             {isDeployed ? (
                                 <span className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-bold text-green-400 tracking-wider uppercase flex items-center space-x-1">
                                     <span className="material-icons text-[10px]">check_circle</span>
-                                    <span>Deployed</span>
+                                    <span>Self-Deployed</span>
                                 </span>
                             ) : (
                                 <>
@@ -1486,7 +1514,10 @@ const WorkspaceCanvas = () => {
                                     const cheapest = sortedByPrice[0];
                                     const isCheapest = target.provider === cheapest?.provider;
                                     const providerName = target.provider === 'AZURE' ? 'Azure' : target.provider;
-                                    const targetInfo = providerStrengths[target.provider] || { strengths: [], bestFor: [] };
+                                    const targetInfo = {
+                                        strengths: target.pros?.length > 0 ? target.pros : (providerStrengths[target.provider]?.strengths || []),
+                                        bestFor: target.best_for?.length > 0 ? target.best_for : (providerStrengths[target.provider]?.bestFor || [])
+                                    };
 
                                     return (
                                         <details className="group bg-gradient-to-br from-surface/80 to-surface/40 border border-border rounded-2xl transition-all hover:border-primary/30">
@@ -1596,47 +1627,73 @@ const WorkspaceCanvas = () => {
                                             Confidence is based on the <strong className="text-white">"weakest link"</strong> principle — the overall score is capped by the lowest individual factor.
                                         </p>
                                         <div className="space-y-3">
-                                            {costEstimation.confidence_breakdown ? (
-                                                <>
-                                                    {/* Usage Completeness */}
-                                                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
-                                                        <div className="flex items-center space-x-3">
-                                                            <span className="material-icons text-blue-400 text-lg">data_usage</span>
-                                                            <div>
-                                                                <div className="text-sm font-medium text-white">Usage Data Completeness</div>
-                                                                <div className="text-xs text-gray-400">{costEstimation.confidence_breakdown.usage_completeness?.label || 'N/A'}</div>
+                                            <div className="space-y-3">
+                                                {(() => {
+                                                    const breakdown = costEstimation.confidence_breakdown || (costEstimation.breakdown ? {
+                                                        usage_completeness: {
+                                                            label: 'Based on input density',
+                                                            score: Math.round((costEstimation.breakdown.usage_confidence || 0.5) * 100)
+                                                        },
+                                                        pricing_method: {
+                                                            label: 'Based on provider API coverage',
+                                                            score: Math.round((costEstimation.breakdown.estimate_type_score || 0.8) * 100)
+                                                        },
+                                                        architecture_completeness: {
+                                                            label: 'Based on service definitions',
+                                                            score: Math.round((costEstimation.breakdown.architecture_score || 0.7) * 100)
+                                                        }
+                                                    } : null);
+
+                                                    if (breakdown) {
+                                                        return (
+                                                            <>
+                                                                {/* Usage Completeness */}
+                                                                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                                                                    <div className="flex items-center space-x-3">
+                                                                        <span className="material-icons text-blue-400 text-lg">data_usage</span>
+                                                                        <div>
+                                                                            <div className="text-sm font-medium text-white">Usage Data Completeness</div>
+                                                                            <div className="text-xs text-gray-400">{breakdown.usage_completeness?.label || 'Inferred from description'}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-lg font-bold text-blue-400">{breakdown.usage_completeness?.score || 0}%</div>
+                                                                </div>
+                                                                {/* Pricing Method */}
+                                                                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                                                                    <div className="flex items-center space-x-3">
+                                                                        <span className="material-icons text-green-400 text-lg">calculate</span>
+                                                                        <div>
+                                                                            <div className="text-sm font-medium text-white">Pricing Method Reliability</div>
+                                                                            <div className="text-xs text-gray-400">{breakdown.pricing_method?.label || 'Heuristic Estimation'}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-lg font-bold text-green-400">{breakdown.pricing_method?.score || 0}%</div>
+                                                                </div>
+                                                                {/* Architecture Completeness */}
+                                                                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                                                                    <div className="flex items-center space-x-3">
+                                                                        <span className="material-icons text-purple-400 text-lg">architecture</span>
+                                                                        <div>
+                                                                            <div className="text-sm font-medium text-white">Architecture Completeness</div>
+                                                                            <div className="text-xs text-gray-400">{breakdown.architecture_completeness?.label || 'Pattern-based Standard'}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-lg font-bold text-purple-400">{breakdown.architecture_completeness?.score || 0}%</div>
+                                                                </div>
+                                                            </>
+                                                        );
+                                                    } else {
+                                                        return (
+                                                            <div className="text-sm text-gray-500 italic">
+                                                                {costEstimation.confidence_explanation?.[0] || "Detailed breakdown not generated, but overall confidence is calculated."}
                                                             </div>
-                                                        </div>
-                                                        <div className="text-lg font-bold text-blue-400">{costEstimation.confidence_breakdown.usage_completeness?.score || 0}%</div>
-                                                    </div>
-                                                    {/* Pricing Method */}
-                                                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
-                                                        <div className="flex items-center space-x-3">
-                                                            <span className="material-icons text-green-400 text-lg">calculate</span>
-                                                            <div>
-                                                                <div className="text-sm font-medium text-white">Pricing Method Reliability</div>
-                                                                <div className="text-xs text-gray-400">{costEstimation.confidence_breakdown.pricing_method?.label || 'N/A'}</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-lg font-bold text-green-400">{costEstimation.confidence_breakdown.pricing_method?.score || 0}%</div>
-                                                    </div>
-                                                    {/* Architecture Completeness */}
-                                                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
-                                                        <div className="flex items-center space-x-3">
-                                                            <span className="material-icons text-purple-400 text-lg">architecture</span>
-                                                            <div>
-                                                                <div className="text-sm font-medium text-white">Architecture Completeness</div>
-                                                                <div className="text-xs text-gray-400">{costEstimation.confidence_breakdown.architecture_completeness?.label || 'N/A'}</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-lg font-bold text-purple-400">{costEstimation.confidence_breakdown.architecture_completeness?.score || 0}%</div>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <div className="text-sm text-gray-500 italic">Detailed breakdown not available for this estimate.</div>
-                                            )}
+                                                        );
+                                                    }
+                                                })()}
+                                            </div>
                                         </div>
                                     </div>
+
                                 </details>
 
                                 {/* SECTION 5: COST ESTIMATE & CONFIDENCE */}
@@ -1974,7 +2031,7 @@ const WorkspaceCanvas = () => {
                                 infraSpec={infraSpec}
                                 selectedProvider={selectedProvider}
                                 costEstimation={costEstimation}
-                                onComplete={() => setStep('deployment_ready')}
+                                onComplete={() => setStep('deployment_summary')}
                                 onBack={() => setStep('feedback')}
                                 isDeployed={isDeployed}
                             />
@@ -2004,109 +2061,27 @@ const WorkspaceCanvas = () => {
                                         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/20 mb-6">
                                             <span className="material-icons text-4xl text-green-400">check_circle</span>
                                         </div>
-                                        <h2 className="text-3xl font-bold text-white">{isDeployed ? 'Deployment Active' : 'Ready for Deployment'}</h2>
+                                        <h2 className="text-3xl font-bold text-white">Deployment Active</h2>
                                         <p className="text-gray-400 mt-3 max-w-md">
-                                            {isDeployed ? 'Your infrastructure is live and running.' : 'Your infrastructure is ready. Thank you for choosing Cloudiverse!'}
+                                            Your infrastructure is live and running.
                                         </p>
-                                    </div>
-
-                                    <div className="bg-surface border border-border rounded-2xl p-6 max-w-2xl w-full">
-                                        <h3 className="text-lg font-bold text-white mb-4">Deployment Summary</h3>
-                                        <div className="space-y-3">
-                                            {/* Project Name */}
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Project</span>
-                                                <span className="text-white font-medium">{infraSpec?.project_name || projectData?.name || 'Untitled Project'}</span>
-                                            </div>
-                                            {/* Architecture Pattern */}
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Architecture</span>
-                                                <span className="text-white font-medium capitalize">
-                                                    {infraSpec?.canonical_architecture?.pattern_name?.replace(/_/g, ' ') ||
-                                                        infraSpec?.pattern_key?.replace(/_/g, ' ') ||
-                                                        'Custom'}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Cloud Provider</span>
-                                                <span className="text-white font-medium">{selectedProvider?.toUpperCase() || 'Not Selected'}</span>
-                                            </div>
-                                            {/* Region */}
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Region</span>
-                                                <span className="text-white font-medium">
-                                                    {infraSpec?.resolved_region?.resolved ||
-                                                        infraSpec?.resolved_region?.logical?.replace(/_/g, ' ') ||
-                                                        'Default'}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Services</span>
-                                                <span className="text-white font-medium">
-                                                    {infraSpec?.canonical_architecture?.deployable_services?.length ||
-                                                        costEstimation?.recommended?.service_count ||
-                                                        costEstimation?.provider_details?.[selectedProvider]?.service_count ||
-                                                        infraSpec?.service_classes?.required_services?.length || 0} services
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between border-t border-border pt-3 mt-3">
-                                                <span className="text-gray-400">Monthly Estimate</span>
-                                                <span className="text-green-400 font-bold text-lg">
-                                                    {costEstimation?.rankings?.find(r => r.provider?.toLowerCase() === selectedProvider?.toLowerCase())?.formatted_cost ||
-                                                        costEstimation?.recommended?.formatted_cost ||
-                                                        costEstimation?.provider_details?.[selectedProvider]?.formatted_cost ||
-                                                        'N/A'}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Cost Profile</span>
-                                                <span className="text-white font-medium capitalize">{costEstimation?.cost_profile?.replace('_', ' ').toLowerCase() || 'standard'}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-400">Deployment Mode</span>
-                                                <span className="text-blue-400 font-medium flex items-center space-x-1">
-                                                    <span className="material-icons text-sm">download_done</span>
-                                                    <span>Self Deployment</span>
-                                                </span>
-                                            </div>
-                                        </div>
                                     </div>
 
                                     {/* Action Buttons */}
                                     <div className="flex flex-col items-center space-y-4">
                                         <button
-                                            onClick={async () => {
-                                                if (isDeployed) {
-                                                    navigate('/workspaces');
-                                                    return;
-                                                }
-                                                try {
-                                                    const token = localStorage.getItem('token');
-                                                    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-                                                    await axios.put(`${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000')}/api/workspaces/${id}/deploy`, {
-                                                        deployment_method: 'self',
-                                                        provider: selectedProvider
-                                                    }, { headers });
-
-                                                    toast.success('🚀 Deployment confirmed! Your project is now active.', { duration: 4000 });
-                                                    setIsDeployed(true);
-                                                    navigate('/workspaces');
-                                                } catch (error) {
-                                                    handleApiError(error, 'Failed to confirm deployment.');
-                                                }
-                                            }}
+                                            onClick={() => navigate('/workspaces')}
                                             className="px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
                                         >
-                                            <span className="material-icons">{isDeployed ? 'dashboard' : 'check_circle'}</span>
-                                            <span>{isDeployed ? 'Return to Dashboard' : 'Continue to Workspace'}</span>
+                                            <span className="material-icons">dashboard</span>
+                                            <span>Return to Dashboard</span>
                                         </button>
                                         <button
                                             onClick={() => setStep('terraform_view')}
                                             className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
                                         >
-                                            <span className="material-icons">arrow_back</span>
-                                            <span>Back to Terraform</span>
+                                            <span className="material-icons">code</span>
+                                            <span>View Code</span>
                                         </button>
                                     </div>
                                 </div>
@@ -2120,95 +2095,96 @@ const WorkspaceCanvas = () => {
                                     <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <span className="material-icons text-green-400 text-4xl">check_circle</span>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white">{isDeployed ? 'Deployment Summary' : 'Deployment Summary'}</h2>
+                                    <h2 className="text-3xl font-bold text-white">{isDeployed ? 'Self-Deployment Confirmed' : 'Ready for Self-Deployment'}</h2>
                                     <p className="text-gray-400 max-w-2xl mx-auto">
-                                        {isDeployed ? 'Your infrastructure has been deployed. Review the Terraform code below.' : 'Your infrastructure is ready for self-deployment. Review the Terraform code below and deploy to your cloud provider.'}
+                                        {isDeployed ? 'Your project is marked as self-deployed. You can manage your infrastructure using the generated Terraform code.' : 'Your Terraform configuration is ready. Download it below to deploy to your cloud provider.'}
                                     </p>
                                 </div>
 
-                                {/* Summary Cards */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="bg-surface border border-border rounded-2xl p-5">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                                <span className="material-icons text-primary">cloud</span>
+                                {/* Enhanced Project Summary Card */}
+                                {/* Compact Vertical Project Summary Card */}
+                                <div className="bg-surface border border-border rounded-2xl p-6 mb-8 max-w-3xl mx-auto shadow-xl">
+                                    <div className="flex flex-col space-y-6">
+                                        {/* Header: Project Info */}
+                                        <div className="border-b border-border pb-6 text-center">
+                                            <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-full mb-3">
+                                                <span className="material-icons text-primary text-2xl">rocket_launch</span>
                                             </div>
-                                            <div>
-                                                <div className="text-xs text-gray-500 uppercase tracking-widest">Provider</div>
-                                                <div className="text-white font-bold">{selectedProvider || 'AWS'}</div>
-                                            </div>
+                                            <h2 className="text-2xl font-bold text-white mb-2">
+                                                {projectData?.name || infraSpec?.project_name || 'Untitled Project'}
+                                            </h2>
+                                            <p className="text-gray-400 text-sm italic">
+                                                "{description || 'No description provided.'}"
+                                            </p>
                                         </div>
-                                    </div>
-                                    <div className="bg-surface border border-border rounded-2xl p-5">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                                                <span className="material-icons text-green-400">paid</span>
-                                            </div>
-                                            <div>
-                                                <div className="text-xs text-gray-500 uppercase tracking-widest">Estimated Cost</div>
-                                                <div className="text-white font-bold">
-                                                    {costEstimation?.rankings?.find(r => r.provider === selectedProvider)?.formatted_cost || '$0/month'}
+
+                                        {/* Details Grid (2 columns for compactness) */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* Cloud Provider */}
+                                            <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                <div className="flex items-center space-x-3">
+                                                    <span className="material-icons text-blue-400">cloud</span>
+                                                    <span className="text-sm text-gray-300 font-medium">Cloud Provider</span>
                                                 </div>
+                                                <span className="text-white font-bold">{selectedProvider || 'AWS'}</span>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div className="bg-surface border border-border rounded-2xl p-5">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                                                <span className="material-icons text-purple-400">download</span>
+
+                                            {/* Architecture Pattern */}
+                                            <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                <div className="flex items-center space-x-3">
+                                                    <span className="material-icons text-purple-400">schema</span>
+                                                    <span className="text-sm text-gray-300 font-medium">Architecture Pattern</span>
+                                                </div>
+                                                <span className="text-white font-bold text-sm capitalize truncate max-w-[150px]" title={infraSpec?.architecture_pattern?.replace(/_/g, ' ') || infraSpec?.canonical_architecture?.pattern_name}>
+                                                    {infraSpec?.architecture_pattern?.replace(/_/g, ' ') || infraSpec?.canonical_architecture?.pattern_name || 'Custom Architecture'}
+                                                </span>
                                             </div>
-                                            <div>
-                                                <div className="text-xs text-gray-500 uppercase tracking-widest">Method</div>
-                                                <div className="text-white font-bold">Self Deployment</div>
+
+                                            {/* Region */}
+                                            <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                <div className="flex items-center space-x-3">
+                                                    <span className="material-icons text-orange-400">public</span>
+                                                    <span className="text-sm text-gray-300 font-medium">Region</span>
+                                                </div>
+                                                <span className="text-white font-bold text-sm">{infraSpec?.region?.resolved_region || 'N/A'}</span>
+                                            </div>
+
+                                            {/* Est. Monthly Cost */}
+                                            <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                <div className="flex items-center space-x-3">
+                                                    <span className="material-icons text-green-400">paid</span>
+                                                    <span className="text-sm text-gray-300 font-medium">Est. Monthly Cost</span>
+                                                </div>
+                                                <span className="text-white font-bold">
+                                                    {costEstimation?.rankings?.find(r => r.provider === selectedProvider)?.formatted_cost || '$0/mo'}
+                                                </span>
+                                            </div>
+
+                                            {/* Services Count */}
+                                            <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                <div className="flex items-center space-x-3">
+                                                    <span className="material-icons text-yellow-400">layers</span>
+                                                    <span className="text-sm text-gray-300 font-medium">Services Configured</span>
+                                                </div>
+                                                <span className="text-white font-bold">
+                                                    {infraSpec?.modules?.length || infraSpec?.canonical_architecture?.deployable_services?.length || 0}
+                                                </span>
+                                            </div>
+
+                                            {/* Deployment Method */}
+                                            <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                <div className="flex items-center space-x-3">
+                                                    <span className="material-icons text-cyan-400">settings_applications</span>
+                                                    <span className="text-sm text-gray-300 font-medium">Deployment Method</span>
+                                                </div>
+                                                <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs font-bold uppercase">
+                                                    Self Deployment
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Terraform Code Preview */}
-                                <details className="group bg-surface border border-border rounded-2xl overflow-hidden" open>
-                                    <summary className="px-6 py-4 cursor-pointer flex items-center justify-between bg-gray-900/50">
-                                        <div className="flex items-center space-x-3">
-                                            <span className="material-icons text-blue-400">code</span>
-                                            <span className="font-bold text-white">Terraform Code</span>
-                                        </div>
-                                        <span className="material-icons text-gray-400 group-open:rotate-180 transition-transform">expand_more</span>
-                                    </summary>
-                                    <div className="p-6 bg-gray-950 border-t border-border">
-                                        <pre className="text-green-400 text-xs overflow-x-auto max-h-96 font-mono leading-relaxed">
-                                            {architectureData?.terraform_code || `# Terraform configuration for ${selectedProvider || 'AWS'}
-# Generated by Cloudiverse
-
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    ${selectedProvider?.toLowerCase() || 'aws'} = {
-      source  = "${selectedProvider === 'GCP' ? 'hashicorp/google' : selectedProvider === 'AZURE' ? 'hashicorp/azurerm' : 'hashicorp/aws'}"
-      version = "~> 5.0"
-    }
-  }
-}
-
-# Your infrastructure modules will be generated here
-# Download the full Terraform bundle from the workspace dashboard
-
-# Services: ${infraSpec?.modules?.map(m => m.service_name || m.type).join(', ') || 'Not specified'}
-`}
-                                        </pre>
-                                        <div className="mt-4 flex justify-end">
-                                            <button
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(architectureData?.terraform_code || '# Terraform code');
-                                                    toast.success('Terraform code copied to clipboard!');
-                                                }}
-                                                className="px-4 py-2 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-500/20 transition-colors flex items-center space-x-2"
-                                            >
-                                                <span className="material-icons text-sm">content_copy</span>
-                                                <span>Copy Code</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </details>
 
                                 {/* Action Buttons */}
                                 <div className="flex flex-col items-center space-y-4">
@@ -2227,7 +2203,7 @@ terraform {
                                                     provider: selectedProvider
                                                 }, { headers });
 
-                                                toast.success('🚀 Deployment confirmed! Your project is now marked as deployed.', { duration: 4000 });
+                                                toast.success('🚀 Project marked as Self-Deployed!', { duration: 4000 });
                                                 setIsDeployed(true);
                                                 navigate('/workspaces');
                                             } catch (error) {
@@ -2237,7 +2213,7 @@ terraform {
                                         className="px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
                                     >
                                         <span className="material-icons">{isDeployed ? 'dashboard' : 'check_circle'}</span>
-                                        <span>{isDeployed ? 'Return to Dashboard' : 'Confirm & Continue to Dashboard'}</span>
+                                        <span>{isDeployed ? 'Return to Dashboard' : 'Mark as Self-Deployed'}</span>
                                     </button>
                                     <button
                                         onClick={() => setStep('terraform_view')}

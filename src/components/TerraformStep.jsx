@@ -3,6 +3,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import DeploymentGuide from './DeploymentGuide';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000') + '/api';
 
@@ -13,7 +14,8 @@ const TerraformStep = ({
     costEstimation,
     onComplete,
     onBack,
-    isDeployed
+    isDeployed,
+    onTerraformLoaded // 🔥 New prop
 }) => {
     const [loading, setLoading] = useState(true);
     const [terraformProject, setTerraformProject] = useState(null); // V2: Folder structure
@@ -58,9 +60,26 @@ const TerraformStep = ({
                     });
 
                     if (response.data.success) {
+                        // Helper to nested file structure
+                        const unflatten = (data) => {
+                            const result = {};
+                            for (const [path, content] of Object.entries(data)) {
+                                const parts = path.split('/');
+                                let current = result;
+                                for (let i = 0; i < parts.length - 1; i++) {
+                                    const part = parts[i];
+                                    if (!current[part]) current[part] = {};
+                                    current = current[part];
+                                }
+                                current[parts[parts.length - 1]] = content;
+                            }
+                            return result;
+                        };
+
                         // V2: Handle modular project structure with hash and manifest
                         if (response.data.terraform.structure === 'modular') {
-                            setTerraformProject(response.data.terraform.project);
+                            // Fix: Unflatten the flat path structure from backend
+                            setTerraformProject(unflatten(response.data.terraform.project));
 
                             // Store hash and manifest for audit (optional)
                             console.log('[TERRAFORM] Hash:', response.data.terraform_hash?.substring(0, 16) + '...');
@@ -70,6 +89,11 @@ const TerraformStep = ({
                             setTerraformProject({ 'main.tf': response.data.terraform.code });
                         }
                         setServices(response.data.services || []);
+
+                        // 🔥 Trigger Deployment Status Update
+                        if (onTerraformLoaded) {
+                            onTerraformLoaded();
+                        }
                     }
                 } catch (err) {
                     console.warn('Terraform generation failed (non-blocking):', err);
@@ -176,7 +200,7 @@ const TerraformStep = ({
             const loadingId = toast.loading('Preparing deployment package...');
 
             // Use server-side export to get the full bundle including Deployment Guide
-            const response = await axios.get(`${API_BASE}/workflow/export-terraform`, {
+            const response = await axios.get(`${API_BASE}/workflow/export-terraform?provider=${selectedProvider}&workspaceId=${workspaceId}`, {
                 responseType: 'blob'
             });
 
@@ -306,6 +330,47 @@ const TerraformStep = ({
     const fileTree = terraformProject ? getFileTree(terraformProject) : [];
     const currentContent = getCurrentFileContent();
 
+    const getProviderCommands = (provider) => {
+        const p = provider?.toLowerCase();
+        if (p === 'aws') {
+            return [
+                { cmd: 'terraform init', desc: 'Initialize Terraform working directory' },
+                { cmd: 'terraform plan', desc: 'Generate and show an execution plan' },
+                { cmd: 'terraform apply', desc: 'Builds or changes infrastructure' }
+            ];
+        }
+        if (p === 'azure') {
+            return [
+                { cmd: 'az login', desc: 'Log in to Azure CLI' },
+                { cmd: 'terraform init', desc: 'Initialize Terraform' },
+                { cmd: 'terraform apply', desc: 'Deploy infrastructure' }
+            ];
+        }
+        if (p === 'gcp') {
+            return [
+                { cmd: 'gcloud auth application-default login', desc: 'Acquire new user credentials' },
+                { cmd: 'terraform init', desc: 'Initialize Terraform' },
+                { cmd: 'terraform apply', desc: 'Deploy infrastructure' }
+            ];
+        }
+        return [];
+    };
+
+    const commands = getProviderCommands(selectedProvider);
+
+    // Normalize provider for display and logic
+    const providerKey = selectedProvider?.toLowerCase().replace(/\s+/g, '');
+    const isAws = providerKey === 'aws' || providerKey === 'amazonwebservices';
+    const isAzure = providerKey === 'azure' || providerKey === 'microsoftazure';
+    const isGcp = providerKey === 'gcp' || providerKey === 'googlecloudplatform' || providerKey === 'google';
+
+    // Fallback for resources: if services array is empty, derive from file tree
+    const displayResources = services.length > 0 ? services : fileTree.filter(f => !f.name.endsWith('.tf') && !f.name.endsWith('.md') && !f.type === 'folder').map(f => f.name.replace('.tf', ''));
+    // If still empty, try to extract from tf files (simple heuristic)
+    const effectiveResources = displayResources.length > 0 ? displayResources : (
+        terraformProject && typeof terraformProject === 'object' ? Object.keys(terraformProject).filter(k => k.endsWith('.tf') && k !== 'main.tf' && k !== 'variables.tf' && k !== 'outputs.tf').map(k => k.replace('.tf', '')) : []
+    );
+
     return (
         <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-20">
             <div className="flex items-center justify-between mb-2">
@@ -313,7 +378,9 @@ const TerraformStep = ({
                     <h2 className="text-2xl font-bold text-white">Your Infrastructure Code</h2>
                     <p className="text-sm text-gray-400">Modular Terraform project for {selectedProvider}</p>
                 </div>
-                <div className="flex space-x-3">
+                <div className="flex space-x-3 items-center">
+                    {/* Live Toggle (Visible only when deployed) */}
+
                     <button
                         onClick={copyToClipboard}
                         className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center space-x-2"
@@ -382,39 +449,32 @@ const TerraformStep = ({
                 </div>
             </div>
 
-            {services.length > 0 && (
-                <div className="mt-8">
-                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Included Resources</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {services.map((service, idx) => (
-                            <div key={idx} className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded text-xs text-blue-300 font-mono">
-                                {service.terraform_resource || service.cloud_service || service.generic_name || service}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            {/* Deployment Guide */}
+            <div className="mt-8">
+                <DeploymentGuide
+                    provider={selectedProvider}
+                    region={infraSpec.region?.resolved_region}
+                    projectName={infraSpec.project_name}
+                />
+            </div>
 
-            {!isDeployed && (
-                <div className="flex justify-between items-center pt-8 border-t border-white/5 mt-8">
-                    <button
-                        onClick={onBack}
-                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
-                    >
-                        <span className="material-icons">arrow_back</span>
-                        <span>Back</span>
-                    </button>
+            <div className="flex justify-between items-center pt-8 border-t border-white/5 mt-8">
+                <button
+                    onClick={onBack}
+                    className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                >
+                    <span className="material-icons">arrow_back</span>
+                    <span>Back to Diagram</span>
+                </button>
 
-                    {/* Continue to Summary */}
-                    <button
-                        onClick={onComplete}
-                        className="px-8 py-4 bg-primary hover:bg-primary/90 border border-primary/20 rounded-xl text-black font-bold transition-all flex items-center space-x-3"
-                    >
-                        <span className="material-icons">summarize</span>
-                        <span>View Summary</span>
-                    </button>
-                </div>
-            )}
+                <button
+                    onClick={onComplete}
+                    className="px-8 py-4 bg-primary hover:bg-primary/90 border border-primary/20 rounded-xl text-black font-bold transition-all flex items-center space-x-3"
+                >
+                    <span className="material-icons">summarize</span>
+                    <span>View Summary</span>
+                </button>
+            </div>
         </div>
     );
 };

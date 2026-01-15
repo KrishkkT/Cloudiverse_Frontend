@@ -14,7 +14,7 @@ const PremiumSignup = React.lazy(() => import('./pages/PremiumSignup'));
 const Register = React.lazy(() => import('./pages/Register'));
 const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword'));
 const WorkspaceSelector = React.lazy(() => import('./pages/WorkspaceSelector'));
-const MockWorkflowWorkspace = React.lazy(() => import('./pages/MockWorkflowWorkspace'));
+
 const WorkspaceCanvas = React.lazy(() => import('./pages/WorkspaceCanvas'));
 const CloudComparison = React.lazy(() => import('./pages/CloudComparison'));
 const TerraformViewer = React.lazy(() => import('./pages/TerraformViewer'));
@@ -51,7 +51,8 @@ function App() {
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/docs" element={<Docs />} />
+            <Route path="/docs/:section?" element={<Docs />} />
+
 
             {/* Static Pages */}
             <Route path="/about" element={<About />} />
