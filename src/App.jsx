@@ -33,6 +33,7 @@ const Terms = React.lazy(() => import('./pages/Terms'));
 const Privacy = React.lazy(() => import('./pages/Privacy'));
 const Security = React.lazy(() => import('./pages/Security'));
 const Compliance = React.lazy(() => import('./pages/Compliance'));
+const NotFound = React.lazy(() => import('./pages/NotFound'));
 
 // Loading Fallback Component
 const LoadingFallback = () => (
@@ -112,6 +113,8 @@ function App() {
                 </div>
               </div>
             } />
+            {/* 404 Page (Catch All) */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </Router>

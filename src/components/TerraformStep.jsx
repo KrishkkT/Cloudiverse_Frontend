@@ -23,6 +23,7 @@ const TerraformStep = ({
     const [services, setServices] = useState([]);
     const [error, setError] = useState(null);
     const [isComingSoon, setIsComingSoon] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         const fetchTerraform = async () => {
@@ -196,6 +197,7 @@ const TerraformStep = ({
     const downloadZip = async () => {
         if (!terraformProject) return;
 
+        setIsExporting(true);
         try {
             const loadingId = toast.loading('Preparing deployment package...');
 
@@ -241,6 +243,8 @@ const TerraformStep = ({
             saveAs(blob, `${projectName}-terraform-fallback.zip`);
             toast.dismiss();
             toast.success('Downloaded backup zip (client-side generated)');
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -390,10 +394,15 @@ const TerraformStep = ({
                     </button>
                     <button
                         onClick={downloadZip}
-                        className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg text-primary hover:bg-primary/20 transition-colors flex items-center space-x-2"
+                        disabled={isExporting}
+                        className={`px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg text-primary transition-colors flex items-center space-x-2 ${isExporting ? 'opacity-50 cursor-wait' : 'hover:bg-primary/20'}`}
                     >
-                        <span className="material-icons text-sm">download</span>
-                        <span className="text-sm">Download ZIP</span>
+                        {isExporting ? (
+                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                            <span className="material-icons text-sm">download</span>
+                        )}
+                        <span className="text-sm">{isExporting ? 'Zip...' : 'Download ZIP'}</span>
                     </button>
                 </div>
             </div>

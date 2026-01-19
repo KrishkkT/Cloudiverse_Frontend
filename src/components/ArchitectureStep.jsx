@@ -214,24 +214,7 @@ const ArchitectureStep = ({
                 </div>
             </div>
 
-            {/* Architecture Notes */}
-            {architectureData?.notes && (
-                <div className="bg-surface border border-border rounded-2xl p-6">
-                    <h3 className="text-lg font-bold text-white mb-6 flex items-center">
-                        <span className="material-icons mr-2">sticky_note_2</span>
-                        Architecture Notes
-                    </h3>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {architectureData.notes.slice(0, 4).map((note, index) => (
-                            <div key={index} className="flex items-start space-x-3">
-                                <span className="material-icons text-primary text-sm mt-0.5">info</span>
-                                <p className="text-sm text-gray-300">{note}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {/* Deployment Choice Buttons */}
             <div className="flex flex-col space-y-6 pt-8 border-t border-white/5">

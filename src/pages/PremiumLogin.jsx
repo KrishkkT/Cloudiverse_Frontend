@@ -14,18 +14,18 @@ const PremiumLogin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Client-side validation
     if (!email || !email.trim()) {
       toast.error('Please enter your email address', { duration: 4000 });
       return;
     }
-    
+
     if (!password || password.length < 6) {
       toast.error('Password must be at least 6 characters', { duration: 4000 });
       return;
     }
-    
+
     setLoading(true);
 
     try {
@@ -34,10 +34,10 @@ const PremiumLogin = () => {
       setTimeout(() => navigate('/workspaces'), 500);
     } catch (error) {
       console.error('[LOGIN ERROR]', error);
-      
+
       // Enhanced error messages
       let msg = 'Login failed. Please try again.';
-      
+
       if (error.response?.status === 401) {
         msg = 'Invalid email or password. Please check your credentials.';
       } else if (error.response?.status === 404) {
@@ -51,7 +51,7 @@ const PremiumLogin = () => {
       } else {
         msg = error.response?.data?.message || error.response?.data?.msg || msg;
       }
-      
+
       toast.error(msg, { duration: 5000 });
     } finally {
       setLoading(false);
@@ -59,14 +59,14 @@ const PremiumLogin = () => {
   };
 
   return (
-    <div className="font-display bg-background-light dark:bg-background-dark min-h-screen relative overflow-hidden">
+    <div className="font-display bg-background-light dark:bg-background-dark min-h-[100svh] w-full relative overflow-hidden">
       <AuthHeader />
 
       {/* Background Gradients (Fixed) */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-tr from-primary/20 via-blue-500/10 to-purple-500/20 rounded-full blur-[120px] pointer-events-none opacity-60 dark:opacity-30 z-0"></div>
 
       {/* Main Content Container with Top Padding */}
-      <div className="relative z-10 pt-[72px] min-h-screen flex flex-col items-center justify-center pb-12">
+      <div className="relative z-10 pt-[72px] min-h-[100svh] flex flex-col items-center justify-center pb-12">
 
         <div className="w-full max-w-[460px] bg-white/80 dark:bg-card-dark/80 backdrop-blur-2xl rounded-[20px] shadow-2xl border border-white/60 dark:border-white/5 overflow-hidden p-10 box-border mt-8">
 

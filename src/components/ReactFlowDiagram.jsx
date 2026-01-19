@@ -79,10 +79,12 @@ function getLayoutedElements(nodes, edges, direction = 'LR') {
 
   dagreGraph.setGraph({
     rankdir: direction,
-    nodesep: 150,
-    ranksep: 300,
-    marginx: 50,
-    marginy: 50
+    nodesep: 60,   // Reduced from 150 to Compact vertical stack
+    ranksep: 100,  // Reduced from 300 to Compact horizontal layers
+    align: 'DL',   // Down-Left alignment helps with "tall stack" issues
+    ranker: 'longest-path', // Keeps secondary branches distinct
+    marginx: 20,
+    marginy: 20
   });
 
   nodes.forEach((node) => {
@@ -199,8 +201,13 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
     setEdges(layoutedEdges);
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
+  // State for download loading
+  const [isDownloading, setIsDownloading] = React.useState(false);
+
   // Download diagram as PNG (Full Graph Capture)
   const downloadDiagram = useCallback(() => {
+    setIsDownloading(true);
+
     // 1. Calculate bounds of all nodes
     const nodesBounds = getRectOfNodes(nodes);
 
@@ -217,6 +224,7 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
 
     if (!viewportElem) {
       console.error('Viewport element not found');
+      setIsDownloading(false);
       return;
     }
 
@@ -240,6 +248,9 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
       .catch((err) => {
         console.error('Failed to export diagram:', err);
         alert('Failed to export diagram: ' + err.message);
+      })
+      .finally(() => {
+        setIsDownloading(false);
       });
   }, [nodes, provider, pattern]);
 
@@ -260,10 +271,15 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
       <div className="flex justify-end">
         <button
           onClick={downloadDiagram}
-          className="px-4 py-2 bg-primary/20 border border-primary/40 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center space-x-2 text-sm font-semibold"
+          disabled={isDownloading}
+          className={`px-4 py-2 bg-primary/20 border border-primary/40 text-primary rounded-lg transition-colors flex items-center space-x-2 text-sm font-semibold ${isDownloading ? 'opacity-50 cursor-wait' : 'hover:bg-primary/30'}`}
         >
-          <span className="material-icons text-lg">download</span>
-          <span>Download PNG (Full)</span>
+          {isDownloading ? (
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <span className="material-icons text-lg">download</span>
+          )}
+          <span>{isDownloading ? 'Downloading...' : 'Download PNG (Full)'}</span>
         </button>
       </div>
 

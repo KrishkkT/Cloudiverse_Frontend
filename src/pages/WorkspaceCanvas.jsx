@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
@@ -36,6 +36,13 @@ const WorkspaceCanvas = () => {
     const [deploymentMethod, setDeploymentMethod] = useState(null); // 'self' or 'oneclick'
     const [isProjectLive, setIsProjectLive] = useState(false); // Track if project is live
 
+    // Domain Selection States
+    const [domains, setDomains] = useState({ domains: [], facets: [] });
+    const [selectedDomain, setSelectedDomain] = useState('');
+    const [selectedSubdomain, setSelectedSubdomain] = useState('');
+    const [selectedAddons, setSelectedAddons] = useState(new Set()); // Track selected upsells
+    const [isMarkingDeployed, setIsMarkingDeployed] = useState(false); // 🔥 Track self-deployed marking status
+
     // Polish-to-Production States
     const [isAssumptionsDrifted, setIsAssumptionsDrifted] = useState(false);
     const [isUsageUserModified, setIsUsageUserModified] = useState(false);
@@ -53,6 +60,23 @@ const WorkspaceCanvas = () => {
             setIsAssumptionsDrifted(false);
         }
     }, [description, initialDescription, costEstimation]);
+
+    // Fetch domains list on mount
+    useEffect(() => {
+        const fetchDomains = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+                const res = await axios.get(`${API_BASE}/api/workflow/domains`, { headers });
+                if (res.data) {
+                    setDomains(res.data);
+                }
+            } catch (err) {
+                console.warn('Failed to fetch domains:', err.message);
+            }
+        };
+        fetchDomains();
+    }, []);
 
     const handleApiError = (err, fallbackMsg = "An error occurred") => {
         console.error('[API ERROR]', err);
@@ -296,7 +320,9 @@ const WorkspaceCanvas = () => {
             const res = await axios.post(`${API_BASE}/api/workflow/analyze`, {
                 userInput: description,
                 conversationHistory: history,
-                input_type: 'DESCRIPTION' // Tell backend this is initial description
+                input_type: 'DESCRIPTION',
+                domain: selectedDomain || undefined,
+                subdomain: selectedSubdomain || undefined
             }, { headers });
 
             setTimeout(() => {
@@ -337,8 +363,32 @@ const WorkspaceCanvas = () => {
         }
     };
 
-    // DEPRECATED: handleConfirmation removed.
-    // If we ever need it back, look at git history.
+    // Calculate active strategy for Confirm Scope step and payload enrichment
+    const activeStrategy = useMemo(() => {
+        if (!domains?.domains || !selectedDomain || !selectedSubdomain) return {};
+        // domains is the API response with { domains: [...] }
+        return domains.domains.find(d => d.id === selectedDomain)?.subdomains?.find(s => s.id === selectedSubdomain)?.strategy || {};
+    }, [domains, selectedDomain, selectedSubdomain]);
+
+    // Helper to toggle suggestion (move to confirmed)
+    const toggleSuggestion = (key) => {
+        setCurrentQuestion(prev => ({
+            ...prev,
+            features: {
+                ...prev.features,
+                [key]: true // Mark as confirmed present
+            }
+        }));
+    };
+
+    // Helper to toggle add-ons
+    const toggleAddon = (id) => {
+        const newSet = new Set(selectedAddons);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedAddons(newSet);
+    };
+
     // RESTORED: As per Step1.txt "User Confirmation Gate"
     const handleConfirmation = async (approvedAnalysis) => {
         if (isDeployed) return;
@@ -353,11 +403,43 @@ const WorkspaceCanvas = () => {
             // 🔥 FIX: Ensure description exists (fallback to stored description or workspace name)
             const finalDescription = description || projectData?.name || "User confirmed intent";
 
+            // 🔥 ENRICHMENT: Merge "Suggested" features + "Selected Add-ons"
+            const enrichedIntent = { ...approvedAnalysis };
+
+            // 1. Merge Default Suggested Features
+            if (enrichedIntent.features && activeStrategy) {
+                Object.entries(activeStrategy).forEach(([key, isStandard]) => {
+                    // Only merge strictly standard features (boolean true) NOT addons list
+                    if (isStandard === true && enrichedIntent.features[key] !== false && enrichedIntent.features[key] !== true) {
+                        enrichedIntent.features[key] = true;
+                    }
+                });
+            }
+
+            // 2. Merge Selected Add-ons (Upsells)
+            // Prioritize these over defaults
+            if (activeStrategy?.addons && selectedAddons.size > 0) {
+                activeStrategy.addons.forEach(addon => {
+                    if (selectedAddons.has(addon.id)) {
+                        Object.entries(addon.apply_axes || {}).forEach(([k, v]) => {
+                            // If boolean, put in features. Else in intent (axes).
+                            if (typeof v === 'boolean') {
+                                if (!enrichedIntent.features) enrichedIntent.features = {};
+                                enrichedIntent.features[k] = v;
+                            } else {
+                                if (!enrichedIntent.intent) enrichedIntent.intent = {};
+                                enrichedIntent.intent[k] = v;
+                            }
+                        });
+                    }
+                });
+            }
+
             const res = await axios.post(`${API_BASE}/api/workflow/analyze`, {
                 userInput: finalDescription,
                 conversationHistory: history,
                 input_type: 'CONFIRMATION', // Tell backend user confirmed the intent
-                approvedIntent: approvedAnalysis // Send back the logic gate approval
+                approvedIntent: enrichedIntent // Send back the logic gate approval with suggestions applied
             }, { headers });
 
             setTimeout(() => {
@@ -375,28 +457,11 @@ const WorkspaceCanvas = () => {
                     toast.success("Architecture Generated Successfully!");
                 }
             }, 1000);
+
         } catch (err) {
-            console.error('[CONFIRMATION ERROR]', err);
-            setIsProcessing(false);
+            handleApiError(err, "Failed to confirm intent.");
+            // Revert step to allow retry
             setStep('confirm_intent');
-
-            // Enhanced error messages
-            let errMsg = "Failed to confirm and generate architecture.";
-
-            if (err.response?.status === 400) {
-                errMsg = err.response?.data?.msg || err.response?.data?.error || "Invalid confirmation data. Please try again.";
-            } else if (err.response?.status === 401) {
-                errMsg = "Session expired. Please login again.";
-                setTimeout(() => navigate('/'), 1500);
-            } else if (err.response?.status === 500) {
-                errMsg = "Server error during architecture generation. Please try again.";
-            } else if (!err.response) {
-                errMsg = "Network error. Please check your connection.";
-            } else {
-                errMsg = err.response?.data?.msg || err.response?.data?.error || errMsg;
-            }
-
-            toast.error(errMsg, { duration: 5000 });
         }
     };
     const handleAnswerQuestion = async (answer) => {
@@ -780,6 +845,68 @@ const WorkspaceCanvas = () => {
                                         }
                                     </p>
                                 </div>
+
+                                {/* Domain Selection (Optional) */}
+                                {!isDeployed && (
+                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-6 shadow-lg backdrop-blur-sm">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="p-1.5 bg-primary/10 rounded-lg">
+                                                <span className="material-icons text-primary text-sm">category</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-base font-bold text-white block">Project Domain</span>
+                                                <span className="text-xs text-gray-400">Select a domain to get tailored architecture patterns</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Primary Domain</label>
+                                                <select
+                                                    value={selectedDomain}
+                                                    onChange={(e) => {
+                                                        setSelectedDomain(e.target.value);
+                                                        setSelectedSubdomain('');
+                                                    }}
+                                                    disabled={!domains?.domains?.length}
+                                                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 disabled:cursor-wait appearance-none"
+                                                    style={{ colorScheme: 'dark' }}
+                                                >
+                                                    <option value="" style={{ backgroundColor: '#111827', color: 'white' }}>
+                                                        {domains?.domains?.length ? "Auto-detect from description (Default)" : "Loading domains..."}
+                                                    </option>
+                                                    {domains?.domains?.map(d => (
+                                                        <option key={d.id} value={d.id} style={{ backgroundColor: '#111827', color: 'white' }}>
+                                                            {d.label || d.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div className={`transition-opacity duration-300 ${selectedDomain ? 'opacity-100' : 'opacity-50'}`}>
+                                                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Subdomain Strategy</label>
+                                                <select
+                                                    value={selectedSubdomain}
+                                                    onChange={(e) => setSelectedSubdomain(e.target.value)}
+                                                    disabled={!selectedDomain}
+                                                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed appearance-none"
+                                                    style={{ colorScheme: 'dark' }}
+                                                >
+                                                    <option value="" style={{ backgroundColor: '#111827', color: 'white' }}>General Implementation</option>
+                                                    {domains?.domains
+                                                        ?.find(d => d.id === selectedDomain)
+                                                        ?.subdomains?.map(sub => (
+                                                            <option key={sub.id} value={sub.id} style={{ backgroundColor: '#111827', color: 'white' }}>
+                                                                {sub.label}
+                                                            </option>
+                                                        ))
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="relative group">
                                     <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
                                     <div className="relative bg-surface border border-border rounded-2xl p-2 shadow-2xl">
@@ -878,10 +1005,24 @@ const WorkspaceCanvas = () => {
                                                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
                                                     <span className="text-[10px] text-gray-500 uppercase">Confirmed</span>
                                                 </div>
-                                                <div className="flex items-center space-x-1">
-                                                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                                    <span className="text-[10px] text-gray-500 uppercase">Excluded</span>
-                                                </div>
+                                                {/* Only show excluded legend if there are exclusions */}
+                                                {currentQuestion.exclusions && currentQuestion.exclusions.length > 0 && (
+                                                    <div className="flex items-center space-x-1">
+                                                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                                        <span className="text-[10px] text-gray-500 uppercase">Excluded</span>
+                                                    </div>
+                                                )}
+                                                {/* Show Suggested legend if there are suggested features */}
+                                                {(() => {
+                                                    // activeStrategy should now be available from component scope
+                                                    const suggestedCount = Object.entries(activeStrategy || {}).filter(([k, v]) => v === true && currentQuestion.features?.[k] !== true && currentQuestion.features?.[k] !== false).length;
+                                                    return suggestedCount > 0 ? (
+                                                        <div className="flex items-center space-x-1">
+                                                            <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                                                            <span className="text-[10px] text-gray-500 uppercase">Suggested</span>
+                                                        </div>
+                                                    ) : null;
+                                                })()}
                                             </div>
                                         </div>
 
@@ -896,7 +1037,7 @@ const WorkspaceCanvas = () => {
                                                     <p className="text-white/80 text-sm italic">{currentQuestion.intent?.workload_type?.replace(/_/g, ' ') || 'Standard Workload'}</p>
                                                 </div>
 
-                                                {/* Explicit Exclusions Section */}
+                                                {/* Explicit Exclusions Section (Conditioned) */}
                                                 {currentQuestion.exclusions && currentQuestion.exclusions.length > 0 && (
                                                     <div>
                                                         <h4 className="text-xs font-bold text-red-500/70 uppercase tracking-widest mb-2 flex items-center">
@@ -923,7 +1064,7 @@ const WorkspaceCanvas = () => {
                                                             <div className="text-[10px] text-green-500 font-bold uppercase">Confirmed Present</div>
                                                             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                                 {Object.entries(currentQuestion.features || {}).filter(([_, v]) => v === true).map(([f, _], i) => (
-                                                                    <li key={i} className="flex items-center text-xs text-gray-200 bg-green-500/5 px-2 py-1 rounded">
+                                                                    <li key={i} className="flex items-center text-xs text-gray-200 bg-green-500/5 px-2 py-1 rounded border border-green-500/10">
                                                                         <span className="material-icons text-[12px] text-green-500 mr-2">check_circle</span>
                                                                         <span className="capitalize">{f.replace(/_/g, ' ')}</span>
                                                                     </li>
@@ -934,20 +1075,102 @@ const WorkspaceCanvas = () => {
                                                             </ul>
                                                         </div>
 
-                                                        {/* Unknown / Not Assumed */}
-                                                        <div className="space-y-2">
-                                                            <div className="text-[10px] text-gray-500 font-bold uppercase">What we did NOT assume</div>
-                                                            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 opacity-60">
-                                                                {Object.entries(currentQuestion.features || {}).filter(([_, v]) => v === 'unknown' || v === false).map(([f, v], i) => (
-                                                                    <li key={i} className="flex items-center text-xs text-gray-400">
-                                                                        <span className="material-icons text-[12px] text-gray-600 mr-2">
-                                                                            {v === false ? 'block' : 'help_outline'}
-                                                                        </span>
-                                                                        <span className="capitalize">{f.replace(/_/g, ' ')}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
+                                                        {/* Suggested Features (Domain Driven) - SELECTABLE */}
+                                                        {(() => {
+                                                            // Use shared activeStrategy
+                                                            const suggested = Object.entries(activeStrategy || {}).filter(([k, v]) =>
+                                                                v === true &&
+                                                                currentQuestion.features?.[k] !== true &&
+                                                                currentQuestion.features?.[k] !== false
+                                                            );
+
+                                                            if (suggested.length === 0) return null;
+
+                                                            return (
+                                                                <div className="space-y-2">
+                                                                    <div className="text-[10px] text-blue-400 font-bold uppercase flex items-center justify-between">
+                                                                        <span>Suggested for {domains?.domains?.find(d => d.id === selectedDomain)?.subdomains?.find(s => s.id === selectedSubdomain)?.label || 'This Domain'}</span>
+                                                                        <span className="text-[9px] bg-blue-500/10 px-1.5 rounded text-blue-300">Click to Confirm</span>
+                                                                    </div>
+                                                                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                        {suggested.map(([f], i) => (
+                                                                            <li
+                                                                                key={i}
+                                                                                onClick={() => toggleSuggestion(f)}
+                                                                                className="flex items-center text-xs text-gray-300 bg-blue-500/5 px-2 py-2 rounded border border-blue-500/10 hover:bg-blue-500/20 hover:border-blue-400 transition-all cursor-pointer group"
+                                                                            >
+                                                                                <div className="w-4 h-4 rounded-full border border-blue-500/30 flex items-center justify-center mr-2 bg-blue-500/0 group-hover:bg-blue-500/20 transition-all">
+                                                                                    <span className="material-icons text-[10px] text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">add</span>
+                                                                                </div>
+                                                                                <span className="capitalize">{f.replace(/_/g, ' ')}</span>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            );
+                                                        })()}
+
+                                                        {/* Recommended Add-ons (Upsells) */}
+                                                        {(() => {
+                                                            const addons = activeStrategy?.addons || [];
+                                                            // Filter logic: Show if NOT triggered yet (e.g. unknown or false)
+                                                            // Hide if condition is already satisfied (true) to avoid redundancy
+                                                            const visibleAddons = addons.filter(addon => {
+                                                                return Object.entries(addon.trigger_when || {}).every(([key, validValues]) => {
+                                                                    // Check features (boolean) first, then intent (string)
+                                                                    let val = currentQuestion.features?.[key];
+                                                                    if (val === undefined) val = currentQuestion.intent?.[key];
+                                                                    if (val === undefined || val === null) val = 'unknown';
+
+                                                                    return validValues.includes(val);
+                                                                });
+                                                            });
+
+                                                            if (visibleAddons.length === 0) return null;
+
+                                                            return (
+                                                                <div className="mt-4 space-y-2">
+                                                                    <div className="text-[10px] text-purple-400 font-bold uppercase flex items-center justify-between">
+                                                                        <span>Recommended Enhancements</span>
+                                                                        <span className="text-[9px] bg-purple-500/10 px-1.5 rounded text-purple-300">Optional</span>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 gap-2">
+                                                                        {visibleAddons.map((addon) => {
+                                                                            const isSelected = selectedAddons.has(addon.id);
+                                                                            return (
+                                                                                <div
+                                                                                    key={addon.id}
+                                                                                    onClick={() => toggleAddon(addon.id)}
+                                                                                    className={`
+                                                                                        group relative flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer
+                                                                                        ${isSelected
+                                                                                            ? 'bg-purple-500/10 border-purple-500/30 shadow-[0_0_15px_-3px_rgba(168,85,247,0.15)]'
+                                                                                            : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'
+                                                                                        }
+                                                                                    `}
+                                                                                >
+                                                                                    <div className={`
+                                                                                        mt-0.5 w-4 h-4 rounded border flex items-center justify-center transition-colors
+                                                                                        ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-gray-600 group-hover:border-gray-400'}
+                                                                                    `}>
+                                                                                        {isSelected && <span className="material-icons text-[10px] text-white">check</span>}
+                                                                                    </div>
+
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className={`text-xs font-semibold mb-0.5 ${isSelected ? 'text-purple-300' : 'text-gray-300'}`}>
+                                                                                            {addon.label}
+                                                                                        </div>
+                                                                                        <div className="text-[10px] text-gray-500 leading-snug">
+                                                                                            {addon.description}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
                                             </div>
@@ -2194,6 +2417,7 @@ const WorkspaceCanvas = () => {
                                                 navigate('/workspaces');
                                                 return;
                                             }
+                                            setIsMarkingDeployed(true);
                                             try {
                                                 const token = localStorage.getItem('token');
                                                 const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -2208,12 +2432,19 @@ const WorkspaceCanvas = () => {
                                                 navigate('/workspaces');
                                             } catch (error) {
                                                 handleApiError(error, 'Failed to confirm deployment.');
+                                            } finally {
+                                                setIsMarkingDeployed(false);
                                             }
                                         }}
-                                        className="px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
+                                        disabled={isMarkingDeployed}
+                                        className={`px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 transition-all shadow-lg shadow-green-500/20 ${isMarkingDeployed ? 'opacity-50 cursor-wait' : 'hover:opacity-90'}`}
                                     >
-                                        <span className="material-icons">{isDeployed ? 'dashboard' : 'check_circle'}</span>
-                                        <span>{isDeployed ? 'Return to Dashboard' : 'Mark as Self-Deployed'}</span>
+                                        {isMarkingDeployed ? (
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        ) : (
+                                            <span className="material-icons">{isDeployed ? 'dashboard' : 'check_circle'}</span>
+                                        )}
+                                        <span>{isMarkingDeployed ? 'Updating...' : (isDeployed ? 'Return to Dashboard' : 'Mark as Self-Deployed')}</span>
                                     </button>
                                     <button
                                         onClick={() => setStep('terraform_view')}
