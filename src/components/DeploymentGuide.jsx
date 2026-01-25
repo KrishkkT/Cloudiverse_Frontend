@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
-const DeploymentGuide = ({ provider, region, projectName }) => {
+const DeploymentGuide = ({ provider, region, projectName, onMarkDeployed, isMarkingDeployed }) => {
     const [isExpanded, setIsExpanded] = useState(false); // Global collapse state
     const [openStep, setOpenStep] = useState(0); // Index of currently open step
     const [completedSteps, setCompletedSteps] = useState(new Set()); // Set of completed step indices
@@ -36,85 +36,6 @@ const DeploymentGuide = ({ provider, region, projectName }) => {
     const isAzure = providerKey === 'azure' || providerKey.includes('microsoft');
     const isGcp = providerKey === 'gcp' || providerKey.includes('google');
 
-    const [osType, setOsType] = useState('Windows');
-
-    // CLI Installation Commands (OS-specific)
-    const getInstallCommands = () => {
-        const tfCmds = osType === 'Windows'
-            ? [{ cmd: 'winget install Hashicorp.Terraform', label: 'Install Terraform' }]
-            : [{ cmd: 'brew tap hashicorp/tap\nbrew install hashicorp/tap/terraform', label: 'Install Terraform' }];
-
-        let cliCmds = [];
-        if (isAws) {
-            cliCmds = osType === 'Windows'
-                ? [
-                    { cmd: 'msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi', label: 'Install AWS CLI' },
-                    { cmd: 'aws --version', label: 'Verify AWS CLI' }
-                ]
-                : [
-                    { cmd: 'brew install awscli', label: 'Install AWS CLI' },
-                    { cmd: 'aws --version', label: 'Verify AWS CLI' }
-                ];
-        } else if (isAzure) {
-            cliCmds = osType === 'Windows'
-                ? [{ cmd: 'Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile AzureCLI.msi\nmsiexec.exe /i AzureCLI.msi', label: 'Install Azure CLI' }]
-                : [{ cmd: 'brew install azure-cli', label: 'Install Azure CLI' }];
-        } else { // GCP
-            cliCmds = osType === 'Windows'
-                ? [{ cmd: 'Invoke-WebRequest -Uri https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe -OutFile gcloud-installer.exe\n.\\gcloud-installer.exe', label: 'Install GCP CLI' }]
-                : [{ cmd: 'brew install --cask google-cloud-sdk', label: 'Install GCP CLI' }];
-        }
-
-        return [...cliCmds, ...tfCmds];
-    };
-
-    // Login Configuration Commands
-    const getLoginCommands = () => {
-        if (isAws) {
-            return [{
-                cmd: `# Run configure to set up credentials
-aws configure
-
-# You will be prompted for:
-# 1. AWS Access Key ID: [PASTE_ACCESS_KEY]
-# 2. AWS Secret Access Key: [PASTE_SECRET_KEY]
-# 3. Default region name: ${region || 'ap-south-1'}
-# 4. Default output format: json`,
-                label: 'Configure AWS Options'
-            }];
-        } else if (isAzure) {
-            return [
-                {
-                    cmd: `az login
-# Browser will open for authentication`,
-                    label: 'Login to Azure'
-                },
-                {
-                    cmd: `az account list --output table
-# Copy subscription ID from list
-az account set --subscription "[SUBSCRIPTION_ID]"`,
-                    label: 'Set Subscription'
-                }
-            ];
-        } else { // GCP
-            return [
-                {
-                    cmd: `gcloud auth application-default login
-# Browser will open for authentication`,
-                    label: 'Login to GCP'
-                },
-                {
-                    cmd: `# List available projects
-gcloud projects list
-
-# Set target project
-gcloud config set project [PROJECT_ID]`,
-                    label: 'Set Project'
-                }
-            ];
-        }
-    };
-
     const steps = [
         {
             title: isAws ? 'Create AWS Account' : isAzure ? 'Create Azure Account' : 'Create GCP Account',
@@ -133,15 +54,28 @@ gcloud config set project [PROJECT_ID]`,
                 { label: 'Terraform Download', url: 'https://www.terraform.io/downloads' },
                 { label: isAws ? 'AWS CLI Guide' : isAzure ? 'Azure CLI Guide' : 'GCloud CLI Guide', url: isAws ? 'https://aws.amazon.com/cli/' : isAzure ? 'https://learn.microsoft.com/cli/azure/install-azure-cli' : 'https://cloud.google.com/sdk/docs/install' }
             ],
-            isInstallStep: true,
-            commands: getInstallCommands()
+            commands: [
+                {
+                    cmd: isAws ? 'aws --version\nterraform --version' : isAzure ? 'az --version\nterraform --version' : 'gcloud --version\nterraform --version',
+                    label: 'Check Versions'
+                }
+            ]
         },
         {
             title: 'Login & Select Region',
             duration: '2 min',
             description: 'Authenticate your CLI sessions and target the correct region.',
             links: null,
-            commands: getLoginCommands()
+            commands: [
+                {
+                    cmd: isAws ?
+                        `aws configure\n# Enter Access Key & Secret Key\naws configure set region ${region || 'ap-south-1'}` :
+                        isAzure ?
+                            `az login\naz account show` :
+                            `gcloud auth application-default login\ngcloud config set project [YOUR_PROJECT_ID]`,
+                    label: 'Login Commands'
+                }
+            ]
         },
         {
             title: 'Initialize Terraform',
@@ -285,24 +219,6 @@ gcloud config set project [PROJECT_ID]`,
                                                     {step.description}
                                                 </p>
 
-                                                {/* OS Toggles for Install Step */}
-                                                {step.isInstallStep && (
-                                                    <div className="flex space-x-2 mb-2">
-                                                        {['Windows', 'macOS'].map(os => (
-                                                            <button
-                                                                key={os}
-                                                                onClick={() => setOsType(os)}
-                                                                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${osType === os
-                                                                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                                                                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                                                                    }`}
-                                                            >
-                                                                {os}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-
                                                 {/* Links (Pills) */}
                                                 {step.links && (
                                                     <div className="flex flex-wrap gap-2">
@@ -379,11 +295,23 @@ gcloud config set project [PROJECT_ID]`,
                         })}
                     </div>
                     {completedSteps.size === steps.length && (
-                        <div className="bg-green-500/10 border-t border-green-500/20 px-6 py-3 text-center">
+                        <div className="bg-green-500/10 border-t border-green-500/20 px-6 py-4 flex flex-col items-center justify-center text-center space-y-3">
                             <span className="text-green-400 text-sm font-bold flex items-center justify-center space-x-2">
                                 <span className="material-icons text-lg">celebration</span>
-                                <span>Deployment Completed!</span>
+                                <span>All Steps Completed!</span>
                             </span>
+                            <button
+                                onClick={onMarkDeployed}
+                                disabled={isMarkingDeployed}
+                                className="px-6 py-2 bg-green-500 hover:bg-green-600 text-black font-bold rounded-lg transition-all flex items-center space-x-2 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isMarkingDeployed ? (
+                                    <div className="w-4 h-4 rounded-full border-2 border-black/30 border-t-black animate-spin"></div>
+                                ) : (
+                                    <span className="material-icons text-sm">check_circle</span>
+                                )}
+                                <span>{isMarkingDeployed ? 'Marking...' : 'Mark as Self Deployed'}</span>
+                            </button>
                         </div>
                     )}
                 </div>

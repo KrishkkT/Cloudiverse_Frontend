@@ -4,6 +4,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import ProtectedRoute from './components/ProtectedRoute'; // Added this import
 import AuthProvider from './context/AuthContext';
 import AuthLayout from './layouts/AuthLayout';
 import './App.css';
@@ -23,6 +24,7 @@ const NewWorkspace = React.lazy(() => import('./pages/NewWorkspace'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const WorkspaceSettings = React.lazy(() => import('./pages/WorkspaceSettings'));
+const ReportDownloadPage = React.lazy(() => import('./pages/ReportDownloadPage')); // Lazy load new page
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
 const Docs = React.lazy(() => import('./pages/Docs'));
 
@@ -33,7 +35,6 @@ const Terms = React.lazy(() => import('./pages/Terms'));
 const Privacy = React.lazy(() => import('./pages/Privacy'));
 const Security = React.lazy(() => import('./pages/Security'));
 const Compliance = React.lazy(() => import('./pages/Compliance'));
-const NotFound = React.lazy(() => import('./pages/NotFound'));
 
 // Loading Fallback Component
 const LoadingFallback = () => (
@@ -75,7 +76,10 @@ function App() {
                 <WorkspaceSelector />
               </div>
             } />
-            <Route path="/workspace/new" element={<NewWorkspace />} />
+            {/* Dashboard & Workspace */}
+            <Route path="/workspaces" element={<ProtectedRoute><WorkspaceSelector /></ProtectedRoute>} />
+            <Route path="/report-download/:workspaceId" element={<ProtectedRoute><ReportDownloadPage /></ProtectedRoute>} />
+            <Route path="/workspace/new" element={<ProtectedRoute><NewWorkspace /></ProtectedRoute>} />
             <Route path="/workspace/:id" element={<WorkspaceCanvas />} />
             <Route path="/workspace/:id/settings" element={<WorkspaceSettings />} />
             <Route path="/profile" element={<Profile />} />
@@ -113,8 +117,6 @@ function App() {
                 </div>
               </div>
             } />
-            {/* 404 Page (Catch All) */}
-            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </Router>

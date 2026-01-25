@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import ReactFlowDiagram from './ReactFlowDiagram';
+
+import ServiceInfoButton from './ServiceInfoButton';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000') + '/api';
 
@@ -15,12 +18,15 @@ const ArchitectureStep = ({
     requirementsData,
     architectureData,
     onArchitectureDataLoaded,
+    onInfraSpecUpdate,
+    onDiagramImageSave,
     onNext,
     onBack,
     isDeployed
 }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const diagramRef = useRef(null);
 
     useEffect(() => {
         const loadArchitecture = async () => {
@@ -117,6 +123,84 @@ const ArchitectureStep = ({
         );
     }
 
+    // IMPLEMENTATION: Service Removal Handler
+    const handleRemoveService = async (serviceId, serviceName) => {
+        if (isDeployed) return;
+
+        const toastId = toast.loading(`Checking if ${serviceName} can be removed...`);
+
+        try {
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            // 1. Validate Removal
+            // We use the validation endpoint first to check guardrails
+            // However, verify logic in server: reconcile checks valid-removal internally too.
+            // But let's be explicit for better UX messages.
+
+            // Construct current_infra mockup from what we have. 
+            // Note: Validation relies on 'services' list with 'state' and 'canonical_type'
+            // architectureData.services usually has these fields.
+            const currentInfra = {
+                services: architectureData.services || [],
+                // Pass full infraSpec if needed, but 'services' array is key for guardrails
+            };
+
+            const action = { type: 'REMOVE_SERVICE', serviceId };
+
+            // 2. Reconcile (This will fail if validation fails)
+            const res = await axios.post(`${API_BASE}/architecture/reconcile`, {
+                action,
+                current_infra: currentInfra
+            }, { headers });
+
+            const { services_contract, deployable_services } = res.data;
+
+            // 3. Success - Update State
+            toast.success(`${serviceName} removed successfully!`, { id: toastId });
+
+            // Update Architecture Data (Local View)
+            // We need to update the services list to reflect the disabled state
+            // and potentially remove it from the visual graph nodes if we want to be fancy.
+            // For now, let's update the services list.
+            const updatedServices = architectureData.services.map(s => {
+                const updatedContract = services_contract.services.find(c => c.id === s.id);
+                if (updatedContract) {
+                    return { ...s, ...updatedContract };
+                }
+                return s;
+            });
+
+            // Re-construct architectureData
+            const newArchData = {
+                ...architectureData,
+                services: updatedServices
+            };
+
+            onArchitectureDataLoaded(newArchData);
+
+            // Update InfraSpec (Global Persisted State)
+            if (onInfraSpecUpdate && infraSpec) {
+                onInfraSpecUpdate({
+                    ...infraSpec,
+                    // We must update the canonical architecture to reflect the removal
+                    // This creates a sync point for Terraform generation
+                    canonical_architecture: {
+                        ...infraSpec.canonical_architecture,
+                        deployable_services: deployable_services, // This is the CLEAN list (no disabled services)
+                    },
+                    // Also update the full services contract if present
+                    services_contract: services_contract
+                });
+            }
+
+        } catch (err) {
+            console.error("Removal Error:", err);
+            const msg = err.response?.data?.error || err.message;
+            toast.error(msg, { id: toastId, duration: 4000 });
+        }
+    };
+
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
             {/* Header */}
@@ -167,7 +251,9 @@ const ArchitectureStep = ({
 
                 {/* React Flow Professional Diagram */}
                 <ReactFlowDiagram
-                    architectureData={architectureData}
+                    ref={diagramRef}
+                    services={architectureData?.architecture?.nodes || []}
+                    edges={architectureData?.architecture?.edges || []}
                     provider={selectedProvider}
                     pattern={infraSpec?.architecture_pattern || 'SERVERLESS_WEB_APP'}
                 />
@@ -185,36 +271,62 @@ const ArchitectureStep = ({
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {architectureData?.services?.map((service, index) => (
-                        <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-colors group">
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                    <div className="flex items-center space-x-2">
-                                        <h4 className="font-bold text-white text-lg">
-                                            {service.pretty_name || service.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </h4>
-                                        <a
-                                            href={`/docs?section=cloud-services&provider=${selectedProvider?.toLowerCase()}&service=${service.name.toLowerCase()}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-gray-500 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="View Documentation"
-                                        >
-                                            <span className="material-icons text-sm">info</span>
-                                        </a>
-                                    </div>
-                                    <p className="text-sm text-gray-400 mt-1">{service.description}</p>
-                                    <div className="text-xs text-gray-500 mt-2 capitalize font-mono">
-                                        {service.category}
+                    {architectureData?.services?.map((service, index) => {
+                        const isDisabled = service.state === 'USER_DISABLED';
+                        if (isDisabled && !isDeployed) return null; // Hide disabled services? OR show them as disabled. 
+                        // Let's hide them for cleaner UI, or show them grayed out.
+                        // User requested "Removal", implying they disappear. 
+                        // But if we hide them, how do they bring them back? 
+                        // For now, let's show them with transparency if we want "undo" later, 
+                        // but standard "Remove" usually implies gone.
+                        // Backend sets state: USER_DISABLED.
+                        // Let's filter them out visually if they are disabled.
+                        if (isDisabled) return null;
+
+                        return (
+                            <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-colors group relative">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                        <div className="flex items-center space-x-2">
+                                            <h4 className="font-bold text-white text-lg">
+                                                {service.name || service.pretty_name || service.canonical_type}
+                                            </h4>
+                                            <ServiceInfoButton
+                                                serviceId={service.canonical_type || service.name}
+                                                provider={selectedProvider}
+                                                serviceName={service.name || service.pretty_name}
+                                            />
+                                        </div>
+                                        <p className="text-sm text-gray-400 mt-1">{service.description}</p>
+                                        <div className="text-xs text-gray-500 mt-2 capitalize font-mono">
+                                            {service.category}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             </div>
 
+            {/* Architecture Notes */}
+            {architectureData?.notes && (
+                <div className="bg-surface border border-border rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-6 flex items-center">
+                        <span className="material-icons mr-2">sticky_note_2</span>
+                        Architecture Notes
+                    </h3>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {architectureData.notes.slice(0, 4).map((note, index) => (
+                            <div key={index} className="flex items-start space-x-3">
+                                <span className="material-icons text-primary text-sm mt-0.5">info</span>
+                                <p className="text-sm text-gray-300">{note}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Deployment Choice Buttons */}
             <div className="flex flex-col space-y-6 pt-8 border-t border-white/5">
@@ -242,7 +354,58 @@ const ArchitectureStep = ({
                         </div>
                     ) : (
                         <button
-                            onClick={() => onNext('self')}
+                            onClick={async () => {
+                                // 📸 Capture Diagram for Report
+                                if (diagramRef.current) {
+                                    const toastId = 'snapshot-save';
+                                    try {
+                                        if (!workspaceId) {
+                                            console.error('Missing workspaceId for snapshot save');
+                                            onNext('self');
+                                            return;
+                                        }
+
+                                        toast.loading('Saving architecture snapshot...', { id: toastId });
+                                        const dataUrl = await diagramRef.current.captureScreenshot();
+
+                                        // Save to backend state_json
+                                        const token = localStorage.getItem('token');
+                                        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+                                        // Fetch latest workspace to get full state
+                                        const wsRes = await axios.get(`${API_BASE}/workspaces/${workspaceId}`, { headers });
+                                        const currentState = typeof wsRes.data.state_json === 'string'
+                                            ? JSON.parse(wsRes.data.state_json)
+                                            : wsRes.data.state_json || {};
+
+                                        const updatedState = {
+                                            ...currentState,
+                                            diagramImage: dataUrl // Store base64 image
+                                        };
+
+                                        await axios.post(`${API_BASE}/workspaces/save`, {
+                                            workspaceId,
+                                            step: wsRes.data.step,
+                                            state: updatedState,
+                                            name: wsRes.data.name,
+                                            projectId: wsRes.data.project_id
+                                        }, { headers });
+
+                                        // 🔥 Sync with parent state immediately so subsequent auto-saves pick it up
+                                        if (onDiagramImageSave) {
+                                            onDiagramImageSave(dataUrl);
+                                        }
+
+                                        toast.success('Snapshot saved', { id: toastId });
+
+                                    } catch (e) {
+                                        console.error('Failed to save diagram snapshot:', e);
+                                        const errorMsg = e.response?.data?.msg || 'Could not save diagram snapshot';
+                                        toast.error(errorMsg, { id: toastId });
+                                    }
+                                }
+                                onNext('self');
+                            }}
                             className="p-6 bg-surface border border-border rounded-2xl hover:border-primary/50 transition-all group text-left"
                         >
                             <div className="flex items-center space-x-4 mb-4">

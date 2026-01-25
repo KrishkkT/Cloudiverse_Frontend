@@ -23,111 +23,126 @@ const TerraformStep = ({
     const [services, setServices] = useState([]);
     const [error, setError] = useState(null);
     const [isComingSoon, setIsComingSoon] = useState(false);
-    const [isExporting, setIsExporting] = useState(false);
 
-    useEffect(() => {
-        const fetchTerraform = async () => {
+    // UI States
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [isSelfDeployed, setIsSelfDeployed] = useState(false); // Toggle state
+
+    // ... existing useEffect ...
+    const fetchTerraform = async () => {
+        try {
+            // 🔒 PRE-CHECK: Verify Step 3 completed (sizing exists)
+            if (!infraSpec?.sizing) {
+                console.warn('[TERRAFORM] Skipping generation - Step 3 not completed (missing sizing)');
+                setError('Cost analysis must be completed before generating Terraform. Please go back and complete Step 3.');
+                setLoading(false);
+                return;
+            }
+
+            // 🔒 PRE-CHECK: Verify Step 2 region resolution completed
+            // 🔥 AUTO-FIX: If region missing, determine based on provider (Project uses India defaults)
+            const resolvedRegion = infraSpec?.region?.resolved_region ||
+                (selectedProvider?.toUpperCase() === 'AWS' ? 'ap-south-1' :
+                    selectedProvider?.toUpperCase() === 'GCP' ? 'asia-south1' :
+                        selectedProvider?.toUpperCase() === 'AZURE' ? 'Central India' : null);
+
+            if (!resolvedRegion) {
+                console.warn('[TERRAFORM] Skipping generation - Step 2 region resolution not completed');
+                setError('Region resolution must be completed before generating Terraform. Please go back and ensure Step 2 is completed.');
+                setLoading(false);
+                return;
+            }
+
+            // Patch infraSpec for the request if needed
+            const requestSpec = { ...infraSpec };
+            if (!requestSpec.region) requestSpec.region = {};
+            if (!requestSpec.region.resolved_region) requestSpec.region.resolved_region = resolvedRegion;
+
+            // Determine profile logic same as feedback step
+            const providerDetails = costEstimation.provider_details?.[selectedProvider];
+            const selectedProfile = Object.entries(costEstimation.scenarios || {}).find(
+                ([_, providers]) => providers[selectedProvider]?.monthly_cost === providerDetails?.total_monthly_cost
+            )?.[0] || 'standard';
+
             try {
-                // 🔒 PRE-CHECK: Verify Step 3 completed (sizing exists)
-                if (!infraSpec?.sizing) {
-                    console.warn('[TERRAFORM] Skipping generation - Step 3 not completed (missing sizing)');
-                    setError('Cost analysis must be completed before generating Terraform. Please go back and complete Step 3.');
-                    setLoading(false);
-                    return;
-                }
+                const response = await axios.post(`${API_BASE}/workflow/terraform`, {
+                    workspace_id: workspaceId,
+                    infraSpec: requestSpec, // 🔥 FIX: Use patched spec with region
+                    provider: selectedProvider,
+                    profile: selectedProfile,
+                    project_name: infraSpec.project_name || 'cloudiverse-project',
+                    requirements: {} // NFR requirements
+                });
 
-                // 🔒 PRE-CHECK: Verify Step 2 region resolution completed
-                if (!infraSpec?.region?.resolved_region) {
-                    console.warn('[TERRAFORM] Skipping generation - Step 2 region resolution not completed');
-                    setError('Region resolution must be completed before generating Terraform. Please go back and ensure Step 2 is completed.');
-                    setLoading(false);
-                    return;
-                }
-
-                // Determine profile logic same as feedback step
-                const providerDetails = costEstimation.provider_details?.[selectedProvider];
-                const selectedProfile = Object.entries(costEstimation.scenarios || {}).find(
-                    ([_, providers]) => providers[selectedProvider]?.monthly_cost === providerDetails?.total_monthly_cost
-                )?.[0] || 'standard';
-
-                try {
-                    const response = await axios.post(`${API_BASE}/workflow/terraform`, {
-                        workspace_id: workspaceId,
-                        infraSpec: infraSpec,
-                        provider: selectedProvider,
-                        profile: selectedProfile,
-                        project_name: infraSpec.project_name || 'cloudiverse-project',
-                        requirements: {} // NFR requirements
-                    });
-
-                    if (response.data.success) {
-                        // Helper to nested file structure
-                        const unflatten = (data) => {
-                            const result = {};
-                            for (const [path, content] of Object.entries(data)) {
-                                const parts = path.split('/');
-                                let current = result;
-                                for (let i = 0; i < parts.length - 1; i++) {
-                                    const part = parts[i];
-                                    if (!current[part]) current[part] = {};
-                                    current = current[part];
-                                }
-                                current[parts[parts.length - 1]] = content;
+                if (response.data.success) {
+                    // Helper to nested file structure
+                    const unflatten = (data) => {
+                        const result = {};
+                        for (const [path, content] of Object.entries(data)) {
+                            const parts = path.split('/');
+                            let current = result;
+                            for (let i = 0; i < parts.length - 1; i++) {
+                                const part = parts[i];
+                                if (!current[part]) current[part] = {};
+                                current = current[part];
                             }
-                            return result;
-                        };
-
-                        // V2: Handle modular project structure with hash and manifest
-                        if (response.data.terraform.structure === 'modular') {
-                            // Fix: Unflatten the flat path structure from backend
-                            setTerraformProject(unflatten(response.data.terraform.project));
-
-                            // Store hash and manifest for audit (optional)
-                            console.log('[TERRAFORM] Hash:', response.data.terraform_hash?.substring(0, 16) + '...');
-                            console.log('[TERRAFORM] Manifest:', response.data.deployment_manifest);
-                        } else {
-                            // Legacy single-file support
-                            setTerraformProject({ 'main.tf': response.data.terraform.code });
+                            current[parts[parts.length - 1]] = content;
                         }
-                        setServices(response.data.services || []);
+                        return result;
+                    };
 
-                        // 🔥 Trigger Deployment Status Update
-                        if (onTerraformLoaded) {
-                            onTerraformLoaded();
-                        }
-                    }
-                } catch (err) {
-                    console.warn('Terraform generation failed (non-blocking):', err);
-                    console.error('[TERRAFORM ERROR] Full error:', err.response?.data);
+                    // V2: Handle modular project structure with hash and manifest
+                    if (response.data.terraform.structure === 'modular') {
+                        // Fix: Unflatten the flat path structure from backend
+                        setTerraformProject(unflatten(response.data.terraform.project));
 
-                    // 🔒 FIX 4: Check if this is a "pattern not available" error
-                    const errorMessage = err.response?.data?.message || err.message || '';
-                    const errorDetails = err.response?.data?.details || '';
-
-                    console.error('[TERRAFORM ERROR] Message:', errorMessage);
-                    console.error('[TERRAFORM ERROR] Details:', errorDetails);
-
-                    if (errorMessage.includes('No template for pattern') ||
-                        errorMessage.includes('not available') ||
-                        errorMessage.includes('under construction')) {
-                        // This is expected for new patterns - show coming soon message
-                        setIsComingSoon(true);
-                        console.log('[TERRAFORM UX] Pattern template not available - showing coming soon message');
+                        // Store hash and manifest for audit (optional)
+                        console.log('[TERRAFORM] Hash:', response.data.terraform_hash?.substring(0, 16) + '...');
+                        console.log('[TERRAFORM] Manifest:', response.data.deployment_manifest);
                     } else {
-                        // Unexpected error - show error with details
-                        const displayError = `Failed to generate Terraform code: ${errorMessage}${errorDetails ? '\n' + errorDetails : ''}`;
-                        setError(displayError);
+                        // Legacy single-file support
+                        setTerraformProject({ 'main.tf': response.data.terraform.code });
                     }
-                    throw err; // Re-throw to be caught by the outer catch
+                    setServices(response.data.services || []);
+
+                    // 🔥 Trigger Deployment Status Update
+                    if (onTerraformLoaded) {
+                        onTerraformLoaded();
+                    }
                 }
             } catch (err) {
-                console.error('Terraform generation failed:', err);
-                setError('Failed to generate Terraform code. Please try again.');
-            } finally {
-                setLoading(false);
-            }
-        };
+                console.warn('Terraform generation failed (non-blocking):', err);
+                console.error('[TERRAFORM ERROR] Full error:', err.response?.data);
 
+                // 🔒 FIX 4: Check if this is a "pattern not available" error
+                const errorMessage = err.response?.data?.message || err.message || '';
+                const errorDetails = err.response?.data?.details || '';
+
+                console.error('[TERRAFORM ERROR] Message:', errorMessage);
+                console.error('[TERRAFORM ERROR] Details:', errorDetails);
+
+                if (errorMessage.includes('No template for pattern') ||
+                    errorMessage.includes('not available') ||
+                    errorMessage.includes('under construction')) {
+                    // This is expected for new patterns - show coming soon message
+                    setIsComingSoon(true);
+                    console.log('[TERRAFORM UX] Pattern template not available - showing coming soon message');
+                } else {
+                    // Unexpected error - show error with details
+                    const displayError = `Failed to generate Terraform code: ${errorMessage}${errorDetails ? '\n' + errorDetails : ''}`;
+                    setError(displayError);
+                }
+                throw err; // Re-throw to be caught by the outer catch
+            }
+        } catch (err) {
+            console.error('Terraform generation failed:', err);
+            setError('Failed to generate Terraform code. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchTerraform();
     }, [workspaceId, infraSpec, selectedProvider, costEstimation]);
 
@@ -197,7 +212,7 @@ const TerraformStep = ({
     const downloadZip = async () => {
         if (!terraformProject) return;
 
-        setIsExporting(true);
+        setIsDownloading(true);
         try {
             const loadingId = toast.loading('Preparing deployment package...');
 
@@ -214,6 +229,30 @@ const TerraformStep = ({
             saveAs(response.data, filename);
 
             toast.success('Downloaded Terraform project with Deployment Guide', { id: loadingId });
+
+            // 🔥 Requirement: Toggle on self-deployed after download
+            // Persist to backend so Dashboard knows
+            setTimeout(async () => { // Added async here
+                try {
+                    const token = localStorage.getItem('token');
+                    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+                    // Use the deploy endpoint to mark as 'deployed'
+                    await axios.put(`${API_BASE}/workspaces/${workspaceId}/deploy`, {
+                        deployment_method: 'self',
+                        provider: selectedProvider
+                    }, { headers });
+
+                    console.log('Backend marked as deployed (self).');
+                } catch (deployErr) {
+                    console.error('Failed to mark as deployed in backend:', deployErr);
+                    // Non-blocking, just log
+                }
+
+                setIsSelfDeployed(true);
+                toast.success('Project marked as Self-Deployed');
+            }, 1000);
+
         } catch (err) {
             console.error('Export failed:', err);
             toast.error('Failed to download export package', { id: 'dl_zip' });
@@ -243,8 +282,11 @@ const TerraformStep = ({
             saveAs(blob, `${projectName}-terraform-fallback.zip`);
             toast.dismiss();
             toast.success('Downloaded backup zip (client-side generated)');
+
+            // Fallback also triggers state
+            setIsSelfDeployed(true);
         } finally {
-            setIsExporting(false);
+            setIsDownloading(false);
         }
     };
 
@@ -383,27 +425,38 @@ const TerraformStep = ({
                     <p className="text-sm text-gray-400">Modular Terraform project for {selectedProvider}</p>
                 </div>
                 <div className="flex space-x-3 items-center">
-                    {/* Live Toggle (Visible only when deployed) */}
-
-                    <button
-                        onClick={copyToClipboard}
-                        className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center space-x-2"
-                    >
-                        <span className="material-icons text-sm">content_copy</span>
-                        <span className="text-sm">Copy File</span>
-                    </button>
-                    <button
-                        onClick={downloadZip}
-                        disabled={isExporting}
-                        className={`px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg text-primary transition-colors flex items-center space-x-2 ${isExporting ? 'opacity-50 cursor-wait' : 'hover:bg-primary/20'}`}
-                    >
-                        {isExporting ? (
-                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                        ) : (
-                            <span className="material-icons text-sm">download</span>
+                    <div className="flex space-x-3 items-center">
+                        {/* Live Toggle (Automatically ON after download) */}
+                        {isSelfDeployed && (
+                            <div className="flex items-center space-x-2 bg-green-900/30 border border-green-500/50 px-3 py-1.5 rounded-lg animate-fade-in mr-2">
+                                <div className="relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" name="toggle" id="toggle" checked={true} readOnly className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer translate-x-5 transition-transform duration-200 ease-in bg-green-500 border-green-500" />
+                                    <label htmlFor="toggle" className="toggle-label block overflow-hidden h-5 rounded-full bg-green-300 cursor-pointer"></label>
+                                </div>
+                                <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Self Deployed</span>
+                            </div>
                         )}
-                        <span className="text-sm">{isExporting ? 'Zip...' : 'Download ZIP'}</span>
-                    </button>
+
+                        <button
+                            onClick={copyToClipboard}
+                            className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center space-x-2"
+                        >
+                            <span className="material-icons text-sm">content_copy</span>
+                            <span className="text-sm">Copy File</span>
+                        </button>
+                        <button
+                            onClick={downloadZip}
+                            disabled={isDownloading}
+                            className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg text-primary hover:bg-primary/20 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isDownloading ? (
+                                <div className="w-4 h-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin mr-1"></div>
+                            ) : (
+                                <span className="material-icons text-sm">download</span>
+                            )}
+                            <span className="text-sm">{isDownloading ? 'Downloading...' : 'Download ZIP'}</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -464,6 +517,29 @@ const TerraformStep = ({
                     provider={selectedProvider}
                     region={infraSpec.region?.resolved_region}
                     projectName={infraSpec.project_name}
+                    onMarkDeployed={async () => {
+                        if (isSelfDeployed) return;
+                        // Reuse the downloadZip logic's deployment trigger, or create a specific one
+                        // Since downloadZip has mixed concerns, let's just trigger the backend call here
+                        try {
+                            const loadingId = toast.loading('Marking as deployed...');
+                            const token = localStorage.getItem('token');
+                            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+                            await axios.put(`${API_BASE}/workspaces/${workspaceId}/deploy`, {
+                                deployment_method: 'self',
+                                provider: selectedProvider
+                            }, { headers });
+
+                            toast.success('Project marked as Self-Deployed', { id: loadingId });
+                            setIsSelfDeployed(true);
+                            if (onComplete) onComplete(); // Optional: trigger completion callback
+                        } catch (err) {
+                            console.error(err);
+                            toast.error('Failed to mark deployment.');
+                        }
+                    }}
+                    isMarkingDeployed={isDownloading || isSelfDeployed} // Use existing loading state or deployed state
                 />
             </div>
 

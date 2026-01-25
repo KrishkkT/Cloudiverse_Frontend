@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -11,17 +11,15 @@ import dagre from 'dagre';
 import { toPng } from 'html-to-image';
 import 'reactflow/dist/style.css';
 
-/**
- * REACT FLOW ARCHITECTURE DIAGRAM
- * 
- * Professional graph-based diagram using React Flow + Dagre auto-layout
- * - Interactive pan/zoom
- * - Deterministic layout from canonical services
- * - Clean PNG export
- * - Industry-standard approach
- */
+import ServiceNode from './ServiceNode';
 
-// Category-based color schemes
+const nodeTypes = {
+  service: ServiceNode,
+};
+
+// ... (existing code)
+
+// Category-based coloring
 const CATEGORY_COLORS = {
   client: { bg: '#4B5563', border: '#9CA3AF', text: '#F9FAFB' },
   network: { bg: '#1E40AF', border: '#3B82F6', text: '#DBEAFE' },
@@ -79,12 +77,10 @@ function getLayoutedElements(nodes, edges, direction = 'LR') {
 
   dagreGraph.setGraph({
     rankdir: direction,
-    nodesep: 60,   // Reduced from 150 to Compact vertical stack
-    ranksep: 100,  // Reduced from 300 to Compact horizontal layers
-    align: 'DL',   // Down-Left alignment helps with "tall stack" issues
-    ranker: 'longest-path', // Keeps secondary branches distinct
-    marginx: 20,
-    marginy: 20
+    nodesep: 150,
+    ranksep: 300,
+    marginx: 50,
+    marginy: 50
   });
 
   nodes.forEach((node) => {
@@ -182,10 +178,10 @@ function convertToReactFlowFormat(architectureData) {
   return { nodes, edges };
 }
 
-const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
+const ReactFlowDiagram = React.forwardRef(({ services, edges: rawEdges, provider, pattern }, ref) => {
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => convertToReactFlowFormat(architectureData),
-    [architectureData, provider]
+    () => convertToReactFlowFormat({ architecture: { nodes: services, edges: rawEdges } }),
+    [services, rawEdges, provider]
   );
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
@@ -201,44 +197,47 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
     setEdges(layoutedEdges);
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
-  // State for download loading
-  const [isDownloading, setIsDownloading] = React.useState(false);
-
-  // Download diagram as PNG (Full Graph Capture)
+  // Download/Capture diagram as PNG (Full Graph Capture mechanism)
   const downloadDiagram = useCallback(() => {
-    setIsDownloading(true);
-
-    // 1. Calculate bounds of all nodes
+    // 1. Calculate bounds of all nodes to capture entire graph, not just viewport
     const nodesBounds = getRectOfNodes(nodes);
 
-    // 2. Define image dimensions (content + padding)
-    const imageWidth = nodesBounds.width + 100;
-    const imageHeight = nodesBounds.height + 100;
+    // Safety check if empty
+    if (nodesBounds.width === 0 || nodesBounds.height === 0) return;
 
-    // 3. Compute transform to center the graph at (50, 50)
-    const transformX = -nodesBounds.x + 50;
-    const transformY = -nodesBounds.y + 50;
+    // 2. Define dimensions with some padding
+    const padding = 50;
+    const imageWidth = nodesBounds.width + (padding * 2);
+    const imageHeight = nodesBounds.height + (padding * 2);
+
+    // 3. Transform to move graph to top-left (0,0) + padding
+    const transformX = -nodesBounds.x + padding;
+    const transformY = -nodesBounds.y + padding;
     const transform = `translate(${transformX}px, ${transformY}px) scale(1)`;
 
     const viewportElem = document.querySelector('.react-flow__viewport');
 
     if (!viewportElem) {
       console.error('Viewport element not found');
-      setIsDownloading(false);
       return;
     }
 
-    toPng(viewportElem, {
-      backgroundColor: '#0F172A', // Force background
-      width: imageWidth,
-      height: imageHeight,
-      style: {
-        width: `${imageWidth}px`,
-        height: `${imageHeight}px`,
-        transform: transform,
-      },
-      pixelRatio: 3, // High quality
-    })
+    // Return logic for external caller (ref) OR internal download button
+    const generateImage = () => {
+      return toPng(viewportElem, {
+        backgroundColor: '#0F172A', // Force standard background
+        width: imageWidth,
+        height: imageHeight,
+        style: {
+          width: `${imageWidth}px`,
+          height: `${imageHeight}px`,
+          transform: transform,
+        },
+        pixelRatio: 3, // High resolution (3x) for "infinite resolution" feel
+      });
+    };
+
+    generateImage()
       .then((dataUrl) => {
         const link = document.createElement('a');
         link.download = `architecture-${provider}-${pattern}-${Date.now()}.png`;
@@ -248,11 +247,39 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
       .catch((err) => {
         console.error('Failed to export diagram:', err);
         alert('Failed to export diagram: ' + err.message);
-      })
-      .finally(() => {
-        setIsDownloading(false);
       });
   }, [nodes, provider, pattern]);
+
+  // Expose capture method to parent via Ref
+  useImperativeHandle(ref, () => ({
+    captureScreenshot: async () => {
+      // Same logic as download but returns promise resolving to DataURL
+      const nodesBounds = getRectOfNodes(nodes);
+      if (nodesBounds.width === 0) return null;
+
+      const padding = 50;
+      const imageWidth = nodesBounds.width + (padding * 2);
+      const imageHeight = nodesBounds.height + (padding * 2);
+      const transformX = -nodesBounds.x + padding;
+      const transformY = -nodesBounds.y + padding;
+      const transform = `translate(${transformX}px, ${transformY}px) scale(1)`;
+
+      const viewportElem = document.querySelector('.react-flow__viewport');
+      if (!viewportElem) throw new Error("Viewport not found");
+
+      return toPng(viewportElem, {
+        backgroundColor: '#0F172A',
+        width: imageWidth,
+        height: imageHeight,
+        style: {
+          width: `${imageWidth}px`,
+          height: `${imageHeight}px`,
+          transform: transform,
+        },
+        pixelRatio: 3,
+      });
+    }
+  }));
 
   if (nodes.length === 0) {
     return (
@@ -271,15 +298,10 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
       <div className="flex justify-end">
         <button
           onClick={downloadDiagram}
-          disabled={isDownloading}
-          className={`px-4 py-2 bg-primary/20 border border-primary/40 text-primary rounded-lg transition-colors flex items-center space-x-2 text-sm font-semibold ${isDownloading ? 'opacity-50 cursor-wait' : 'hover:bg-primary/30'}`}
+          className="px-4 py-2 bg-primary/20 border border-primary/40 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center space-x-2 text-sm font-semibold"
         >
-          {isDownloading ? (
-            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-          ) : (
-            <span className="material-icons text-lg">download</span>
-          )}
-          <span>{isDownloading ? 'Downloading...' : 'Download PNG (Full)'}</span>
+          <span className="material-icons text-lg">download</span>
+          <span>Download PNG (Full)</span>
         </button>
       </div>
 
@@ -300,6 +322,7 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
           panOnDrag
           zoomOnScroll
           preventScrolling
+          nodeTypes={nodeTypes}
         >
           <Background color="#1E293B" gap={20} size={1} />
           <Controls
@@ -324,6 +347,6 @@ const ReactFlowDiagram = ({ architectureData, provider, pattern }) => {
       </div>
     </div>
   );
-};
+});
 
 export default ReactFlowDiagram;
