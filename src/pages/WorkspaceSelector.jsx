@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Building, Clock, DollarSign, Settings, User, LogOut, Loader, Search, LayoutGrid, CheckCircle2, FileCode2, PlusCircle, AlertCircle, Wifi, WifiOff, Filter } from 'lucide-react';
+import { Plus, Building, Clock, DollarSign, Settings, User, Home, LogOut, Loader, Search, LayoutGrid, CheckCircle2, FileCode2, PlusCircle, AlertCircle, Wifi, WifiOff, Filter } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { generateProjectReport } from '../utils/pdfGenerator';
@@ -206,6 +206,9 @@ const WorkspaceSelector = () => {
             <p className="text-text-secondary mt-2 text-lg">Manage and organize your cloud infrastructure projects</p>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={() => navigate('/')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center gap-2 hover:bg-white/10 transition-colors">
+              <Home className="w-4 h-4" /> <span>Home</span>
+            </button>
             <button onClick={() => navigate('/profile')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center gap-2 hover:bg-white/10 transition-colors">
               <User className="w-4 h-4" /> <span>Profile</span>
             </button>
@@ -252,6 +255,15 @@ const WorkspaceSelector = () => {
               </select>
               <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             </div>
+            <button
+              onClick={() => navigate('/feedback')}
+              className="px-4 py-3 bg-surface border border-border rounded-xl text-text-primary hover:border-primary/50 hover:bg-surface/80 transition-all flex items-center gap-2 font-medium"
+            >
+              <div className="w-5 h-5 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+              </div>
+              <span>Feedback</span>
+            </button>
           </div>
         </div>
 

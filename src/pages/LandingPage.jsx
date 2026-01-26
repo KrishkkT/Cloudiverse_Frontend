@@ -119,18 +119,29 @@ const LandingPage = () => {
               </div>
             </nav>
             <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/login')}
-                className="text-text-secondary hover:text-text-primary transition-colors"
-              >
-                Login
-              </button>
-              <button
-                onClick={() => navigate('/register')}
-                className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Sign Up
-              </button>
+              {localStorage.getItem('token') ? (
+                <button
+                  onClick={() => navigate('/workspaces')}
+                  className="bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg transition-colors font-medium"
+                >
+                  Dashboard
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => navigate('/register')}
+                    className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Sign Up
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -141,24 +152,33 @@ const LandingPage = () => {
         <div className="absolute inset-0 bg-gradient-to-br from-background via-surface to-background z-0">
           <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-primary/10 to-transparent"></div>
           <div className="absolute bottom-0 left-0 w-1/3 h-full bg-gradient-to-r from-secondary/10 to-transparent"></div>
+
+          {/* Animated Background Blobs */}
+          <div className="absolute top-20 left-20 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-blob -z-10 mix-blend-multiply"></div>
+          <div className="absolute top-40 right-20 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl animate-blob animation-delay-2000 -z-10 mix-blend-multiply"></div>
+          <div className="absolute -bottom-8 left-1/2 w-72 h-72 bg-pink-500/20 rounded-full blur-3xl animate-blob animation-delay-4000 -z-10 mix-blend-multiply"></div>
+
+
         </div>
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32 relative z-10">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+
+        {/* Adjusted padding to move content up */}
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 relative z-10">
+          <div className="max-w-3xl mx-auto text-center space-y-6">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6 animate-fade-in">
               Design, compare, and generate <span className="text-primary">multi-cloud architecture</span> from plain language
             </h1>
-            <p className="text-xl text-text-secondary mb-10 max-w-2xl mx-auto">
+            <p className="text-xl text-text-secondary mb-10 max-w-2xl mx-auto animate-slide-up animation-delay-2000">
               Turn your app ideas into production-ready cloud infrastructure across AWS, Azure, and GCP with AI-powered automation
             </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-center gap-4 animate-slide-up animation-delay-4000">
               <button
                 onClick={() => navigate('/register')}
-                className="bg-primary hover:bg-primary/90 text-white px-8 py-4 rounded-lg text-lg font-medium transition-colors flex items-center justify-center"
+                className="bg-primary hover:bg-primary/90 text-white px-8 py-4 rounded-lg text-lg font-medium transition-colors flex items-center justify-center animate-shimmer shadow-lg shadow-primary/25"
               >
                 Start Free
                 <ChevronRight className="ml-2 h-5 w-5" />
               </button>
-              <button className="bg-surface hover:bg-surface/80 border border-border text-text-primary px-8 py-4 rounded-lg text-lg font-medium transition-colors">
+              <button className="bg-surface hover:bg-surface/80 border border-border text-text-primary px-8 py-4 rounded-lg text-lg font-medium transition-colors hover:border-primary/50">
                 Live Demo
               </button>
             </div>
@@ -372,6 +392,7 @@ const LandingPage = () => {
               <ul className="space-y-2">
                 <li><a href="/about" className="text-text-secondary hover:text-text-primary transition-colors">About Us</a></li>
                 <li><a href="/contact" className="text-text-secondary hover:text-text-primary transition-colors">Contact</a></li>
+                <li><a href="/feedback" className="text-text-secondary hover:text-text-primary transition-colors">Feedback</a></li>
               </ul>
             </div>
             <div>

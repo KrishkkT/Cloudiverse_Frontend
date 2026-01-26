@@ -119,10 +119,8 @@ const Security = () => {
                                 <h3 className="text-lg font-semibold">Report a Vulnerability</h3>
                             </div>
                             <p className="text-text-secondary">
-                                If you discover a security vulnerability, please report it responsibly to <a href="mailto:krishthakker508@gmail.com" className="text-primary hover:underline">
-                                    krishthakker508@gmail.com
-                                </a> or <a href="mailto:hetantandel@gmail.com" className="text-primary hover:underline">
-                                    hetantandel@gmail.com
+                                If you discover a security vulnerability, please report it responsibly to <a href="mailto:support@cloudiverse.app" className="text-primary hover:underline">
+                                    support@cloudiverse.app
                                 </a>
                             </p>
                         </div>

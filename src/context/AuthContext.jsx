@@ -43,6 +43,36 @@ const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
+  // Idle Timeout Logic (24 hours)
+  useEffect(() => {
+    let idleTimer;
+    const IDLE_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+
+    const resetTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      if (user) {
+        idleTimer = setTimeout(() => {
+          console.log('User idle for 24 hours. Logging out...');
+          logout();
+        }, IDLE_TIMEOUT);
+      }
+    };
+
+    // Events to track activity
+    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchmove', 'click'];
+
+    // Attach listeners
+    if (user) {
+      resetTimer(); // Start timer on mount/login
+      events.forEach(event => window.addEventListener(event, resetTimer));
+    }
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, [user]);
+
   const login = async (email, password) => {
     const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, { email, password });
     const { token, user } = res.data;

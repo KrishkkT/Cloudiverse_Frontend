@@ -94,8 +94,7 @@ const Contact = () => {
                                         <Mail className="h-6 w-6 text-primary mr-3" />
                                         <h3 className="text-lg font-semibold">Email</h3>
                                     </div>
-                                    <p className="text-text-secondary">krishthakker508@gmail.com</p>
-                                    <p className="text-text-secondary">hetantandel@gmail.com</p>
+                                    <p className="text-text-secondary">support@cloudiverse.app</p>
                                 </div>
 
                                 <div className="bg-surface border border-border rounded-xl p-6">

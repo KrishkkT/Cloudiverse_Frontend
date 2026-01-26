@@ -131,11 +131,8 @@ const Compliance = () => {
                         <div className="mt-8 text-center">
                             <p className="text-text-secondary">
                                 For compliance inquiries, please contact{' '}<br></br>
-                                <a href="mailto:krishthakker508@gmail.com" className="text-primary hover:underline">
-                                    krishthakker508@gmail.com
-                                </a><br></br>
-                                <a href="mailto:hetantandel@gmail.com" className="text-primary hover:underline">
-                                    hetantandel@gmail.com
+                                <a href="mailto:support@cloudiverse.app" className="text-primary hover:underline">
+                                    support@cloudiverse.app
                                 </a>
                             </p>
                         </div>

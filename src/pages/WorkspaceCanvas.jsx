@@ -4,6 +4,7 @@ import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+import { validateProjectDescription } from '../utils/validation/intentValidator';
 
 import FeedbackStep from '../components/FeedbackStep';
 import TerraformStep from '../components/TerraformStep';
@@ -310,11 +311,17 @@ const WorkspaceCanvas = () => {
     const handleAnalyze = async () => {
         if (isDeployed) return;
 
-        if (!description.trim()) {
-            toast.error("Please describe your project first!");
+        if (isDeployed) return;
+
+        // 🔥 VALIDATION GATE
+        const validation = validateProjectDescription(description);
+        if (!validation.isValid) {
+            toast.error(validation.error);
             return;
         }
+
         setIsProcessing(true);
+
         setStep('processing');
 
         try {
@@ -847,12 +854,12 @@ const WorkspaceCanvas = () => {
                                         <div className="absolute inset-0 flex items-center justify-center">
                                             <span className="material-icons text-4xl text-white animate-pulse">grain</span>
                                         </div>
-                                        <div className="text-center space-y-2">
-                                            <h2 className="text-2xl font-bold text-white">
-                                                {step === 'processing' ? 'Analyzing Intent...' : 'Generating Blueprint...'}
-                                            </h2>
-                                            <p className="text-gray-400 animate-pulse">Architecting your production-grade infrastructure</p>
-                                        </div>
+                                    </div>
+                                    <div className="text-center space-y-2">
+                                        <h2 className="text-2xl font-bold text-white">
+                                            {step === 'processing' ? 'Analyzing Intent...' : 'Generating Blueprint...'}
+                                        </h2>
+                                        <p className="text-gray-400 animate-pulse">Architecting your production-grade infrastructure</p>
                                     </div>
                                 </div>
                             )}

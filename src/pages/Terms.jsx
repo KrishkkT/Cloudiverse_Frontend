@@ -98,10 +98,8 @@ const Terms = () => {
                             <section className="bg-surface border border-border rounded-xl p-6">
                                 <h2 className="text-xl font-semibold mb-4">7. Contact Information</h2>
                                 <p className="text-text-secondary leading-relaxed">
-                                    If you have any questions about these Terms, please contact us at <a href="mailto:krishthakker508@gmail.com" className="text-primary hover:underline">
-                                        krishthakker508@gmail.com
-                                    </a> or <a href="mailto:hetantandel@gmail.com" className="text-primary hover:underline">
-                                        hetantandel@gmail.com
+                                    If you have any questions about these Terms, please contact us at <a href="mailto:support@cloudiverse.app" className="text-primary hover:underline">
+                                        support@cloudiverse.app
                                     </a>.
                                 </p>
                             </section>
