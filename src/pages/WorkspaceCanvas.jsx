@@ -2114,35 +2114,6 @@ const WorkspaceCanvas = () => {
                                                     </div>
                                                 )}
 
-                                                <button
-                                                    onClick={() => transitionToStep('usage_review')}
-                                                    className="w-full text-left p-3 rounded-lg hover:bg-white/5 flex items-center group transition-colors"
-                                                >
-                                                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center mr-3 group-hover:bg-primary/30 transition-colors">
-                                                        <span className="material-icons text-primary text-sm">edit</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-sm font-medium text-gray-200">Refine Usage</span>
-                                                        <p className="text-[10px] text-gray-500">Adjust traffic & storage assumptions</p>
-                                                    </div>
-                                                </button>
-
-
-
-                                                {/* Cost Summary Card */}
-                                                <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-2xl p-6 relative overflow-hidden">
-                                                    <div className="relative z-10">
-                                                        <div className="text-xs font-bold text-green-400 uppercase tracking-widest mb-1">Estimated Monthly Cost</div>
-                                                        <div className="text-3xl font-bold text-white mb-2">
-                                                            {costEstimation?.providers?.[selectedProvider]?.formatted_cost || "$0.00"}
-                                                        </div>
-                                                        <div className="flex items-center space-x-2 text-xs text-gray-400">
-                                                            <span className="bg-white/10 px-2 py-0.5 rounded text-white">{selectedProvider || 'AWS'}</span>
-                                                            <span className="text-gray-500">•</span>
-                                                            <span>{infraSpec?.region?.resolved_region || 'us-east-1'}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
 
                                                 {/* Warnings / Recommendations */}
                                                 {costEstimation?.recommendation_facts?.warnings?.length > 0 && (
