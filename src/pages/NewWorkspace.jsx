@@ -44,7 +44,13 @@ const NewWorkspace = () => {
         navigate(`/workspace/${workspace.id}`, { replace: true });
       } else {
         const errorData = await response.json();
-        setError(errorData.message || 'Failed to create workspace');
+        // Check for specific device limit flag
+        if (errorData.deviceLimitReached) {
+          setError('DEVICE_LIMIT_REACHED');
+          setLoading(false);
+          return;
+        }
+        setError(errorData.msg || errorData.message || 'Failed to create workspace');
         setLoading(false);
       }
     } catch (err) {
@@ -55,31 +61,63 @@ const NewWorkspace = () => {
   };
 
   if (error) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <div className="bg-surface border border-border rounded-xl p-8 max-w-md w-full text-center">
-          <div className="text-red-500 mb-4">
-            <span className="material-icons text-4xl">error_outline</span>
-          </div>
-          <h2 className="text-xl font-semibold text-text-primary mb-2">Error Creating Workspace</h2>
-          <p className="text-text-secondary mb-6">{error}</p>
-          <div className="flex space-x-3 justify-center">
+    if (error === 'DEVICE_LIMIT_REACHED') {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-6">
+          <div className="bg-red-500/10 border border-red-500 rounded-2xl p-8 max-w-lg w-full text-center shadow-2xl shadow-red-500/20">
+            <div className="bg-red-500/20 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="material-icons text-5xl text-red-500">block</span>
+            </div>
+            <h2 className="text-3xl font-black text-white mb-4 uppercase tracking-wider">Access Denied</h2>
+            <p className="text-red-200 text-lg mb-8 leading-relaxed">
+              Security Limit Reached: Maximum 2 accounts allowed per device.<br />
+              You cannot create new projects from this device.
+            </p>
             <button
               onClick={() => navigate('/workspaces')}
-              className="btn btn-secondary px-4 py-2"
+              className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg"
             >
-              Back to Dashboard
+              Return to Dashboard
             </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="bg-surface border border-border rounded-xl p-8 max-w-md w-full text-center shadow-2xl">
+          <div className="text-red-500 mb-4 flex justify-center">
+            <span className="material-icons text-5xl">lock</span>
+          </div>
+          <h2 className="text-2xl font-bold text-text-primary mb-2">Limit Reached</h2>
+          <p className="text-text-secondary mb-8">{error}</p>
+          <div className="flex flex-col gap-3">
             <button
-              onClick={() => {
-                setError(null);
-                setLoading(true);
-                createWorkspaceAndRedirect();
-              }}
-              className="btn btn-primary px-4 py-2"
+              onClick={() => navigate('/settings')}
+              className="w-full px-6 py-3 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold rounded-xl transition-all shadow-lg transform hover:scale-[1.02] flex items-center justify-center gap-2"
             >
-              Try Again
+              <span className="material-icons text-lg">star</span> Upgrade Plan
             </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate('/workspaces')}
+                className="flex-1 px-4 py-2 bg-surface hover:bg-white/5 border border-border rounded-xl text-text-secondary transition-colors"
+                title="Back to Dashboard"
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => {
+                  setError(null);
+                  setLoading(true);
+                  createWorkspaceAndRedirect();
+                }}
+                className="flex-1 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/20 rounded-xl transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
           </div>
         </div>
       </div>

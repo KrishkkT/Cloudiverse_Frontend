@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Menu, X, User, Cloud } from 'lucide-react';
+import { LogOut, Menu, X, User, Cloud, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Navbar = () => {
@@ -17,20 +17,23 @@ const Navbar = () => {
     <nav className="app-navbar glass-effect">
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center space-x-4">
-          <button 
+          <button
             className="md:hidden btn-icon btn-secondary"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
-              <Cloud className="text-white" size={20} />
+            <div className="flex items-center">
+              <a href={'/'}><img
+                src="/cloudiverse.png"
+                alt="Cloudiverse Architect"
+                className="h-12 w-auto"
+              /></a>
             </div>
-            <h1 className="text-xl font-bold text-gradient">Cloudiverse Architect</h1>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           {user ? (
             <div className="flex items-center space-x-3">
@@ -38,13 +41,6 @@ const Navbar = () => {
                 <User size={16} className="text-primary" />
                 <span className="text-sm font-medium truncate max-w-xs">{user.email}</span>
               </div>
-              <button
-                onClick={handleLogout}
-                className="btn-icon btn-secondary"
-                title="Logout"
-              >
-                <LogOut size={20} />
-              </button>
             </div>
           ) : (
             <div className="flex items-center space-x-2">

@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
 const AuthContext = createContext();
 
@@ -10,6 +11,16 @@ export const useAuth = () => {
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deviceId, setDeviceId] = useState(null);
+
+  useEffect(() => {
+    const setFp = async () => {
+      const fp = await FingerprintJS.load();
+      const { visitorId } = await fp.get();
+      setDeviceId(visitorId);
+    };
+    setFp();
+  }, []);
 
   // Set default axios header
   useEffect(() => {
@@ -74,21 +85,41 @@ const AuthProvider = ({ children }) => {
   }, [user]);
 
   const login = async (email, password) => {
-    const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, { email, password });
-    const { token, user } = res.data;
-    localStorage.setItem('token', token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setUser(user);
-    return user;
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, {
+        email,
+        password,
+        device_id: deviceId
+      });
+      localStorage.setItem('token', res.data.token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      setUser(res.data.user);
+      return { success: true };
+    } catch (error) {
+      console.error("Login failed:", error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Login failed'
+      };
+    }
   };
 
   const register = async (name, email, password, company) => {
-    const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/register`, { name, email, password, company });
-    const { token, user } = res.data;
-    localStorage.setItem('token', token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setUser(user);
-    return user;
+    try {
+      const payload = { name, email, password, company, device_id: deviceId };
+      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/register`, payload);
+      const { token, user } = res.data;
+      localStorage.setItem('token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setUser(user);
+      return { success: true, user };
+    } catch (error) {
+      console.error("Registration failed:", error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Registration failed'
+      };
+    }
   };
 
   const updateProfile = async (userData) => {

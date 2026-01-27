@@ -1,5 +1,5 @@
 import React, { useState, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -38,6 +38,8 @@ const Privacy = React.lazy(() => import('./pages/Privacy'));
 const Security = React.lazy(() => import('./pages/Security'));
 const Compliance = React.lazy(() => import('./pages/Compliance'));
 const Feedback = React.lazy(() => import('./pages/Feedback'));
+const ServicePolicy = React.lazy(() => import('./pages/ServicePolicy'));
+const CancellationRefunds = React.lazy(() => import('./pages/CancellationRefunds'));
 
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -51,92 +53,90 @@ function App() {
   return (
     <AuthProvider>
 
-      {/* Always-on captcha gate */}
-      {!captchaVerified && (
-        <CaptchaGate onVerified={() => setCaptchaVerified(true)} />
-      )}
+      <ToastContainer position="top-right" autoClose={3000} theme="colored" />
 
-      {captchaVerified && (
-        <>
-          <ToastContainer position="top-right" autoClose={3000} theme="colored" />
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Suspense fallback={<LoadingFallback />}>
 
-          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={
+              !captchaVerified ? (
+                <CaptchaGate onVerified={() => setCaptchaVerified(true)} />
+              ) : (
+                <LandingPage />
+              )
+            } />
+            <Route path="/docs/:section?" element={<Docs />} />
 
-              <Routes>
-                {/* Public */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/docs/:section?" element={<Docs />} />
+            {/* Static Pages */}
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/security" element={<Security />} />
+            <Route path="/compliance" element={<Compliance />} />
+            <Route path="/service-policy" element={<ServicePolicy />} />
+            <Route path="/cancel-refunds" element={<CancellationRefunds />} />
+            <Route path="/feedback" element={<Feedback />} />
 
-                {/* Static Pages */}
-                <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/terms" element={<Terms />} />
-                <Route path="/privacy" element={<Privacy />} />
-                <Route path="/security" element={<Security />} />
-                <Route path="/compliance" element={<Compliance />} />
-                <Route path="/feedback" element={<Feedback />} />
+            {/* Auth */}
+            <Route path="/login" element={<AuthLayout><PremiumLogin /></AuthLayout>} />
+            <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
+            <Route path="/signup" element={<AuthLayout><PremiumSignup /></AuthLayout>} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
 
-                {/* Auth */}
-                <Route path="/login" element={<AuthLayout><PremiumLogin /></AuthLayout>} />
-                <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
-                <Route path="/signup" element={<AuthLayout><PremiumSignup /></AuthLayout>} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
+            {/* Protected App */}
+            <Route path="/workspace" element={<Navigate to="/workspaces" replace />} />
+            <Route path="/workspaces" element={<ProtectedRoute><WorkspaceSelector /></ProtectedRoute>} />
+            <Route path="/report-download/:workspaceId" element={<ProtectedRoute><ReportDownloadPage /></ProtectedRoute>} />
+            <Route path="/workspace/new" element={<ProtectedRoute><NewWorkspace /></ProtectedRoute>} />
+            <Route path="/workspace/:id" element={<WorkspaceCanvas />} />
+            <Route path="/workspace/:id/settings" element={<WorkspaceSettings />} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
-                {/* Protected App */}
-                <Route path="/workspaces" element={<ProtectedRoute><WorkspaceSelector /></ProtectedRoute>} />
-                <Route path="/report-download/:workspaceId" element={<ProtectedRoute><ReportDownloadPage /></ProtectedRoute>} />
-                <Route path="/workspace/new" element={<ProtectedRoute><NewWorkspace /></ProtectedRoute>} />
-                <Route path="/workspace/:id" element={<WorkspaceCanvas />} />
-                <Route path="/workspace/:id/settings" element={<WorkspaceSettings />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/settings" element={<Settings />} />
+            {/* Layout routes */}
+            <Route path="/comparison/:projectId" element={
+              <div style={{ display: 'flex', width: '100%' }}>
+                <Sidebar />
+                <div className="app-main">
+                  <Navbar />
+                  <main className="app-content">
+                    <CloudComparison />
+                  </main>
+                </div>
+              </div>
+            } />
 
-                {/* Layout routes */}
-                <Route path="/comparison/:projectId" element={
-                  <div style={{ display: 'flex', width: '100%' }}>
-                    <Sidebar />
-                    <div className="app-main">
-                      <Navbar />
-                      <main className="app-content">
-                        <CloudComparison />
-                      </main>
-                    </div>
-                  </div>
-                } />
+            <Route path="/terraform/:projectId" element={
+              <div style={{ display: 'flex', width: '100%' }}>
+                <Sidebar />
+                <div className="app-main">
+                  <Navbar />
+                  <main className="app-content">
+                    <TerraformViewer />
+                  </main>
+                </div>
+              </div>
+            } />
 
-                <Route path="/terraform/:projectId" element={
-                  <div style={{ display: 'flex', width: '100%' }}>
-                    <Sidebar />
-                    <div className="app-main">
-                      <Navbar />
-                      <main className="app-content">
-                        <TerraformViewer />
-                      </main>
-                    </div>
-                  </div>
-                } />
+            <Route path="/cost/:projectId" element={
+              <div style={{ display: 'flex', width: '100%' }}>
+                <Sidebar />
+                <div className="app-main">
+                  <Navbar />
+                  <main className="app-content">
+                    <CostEstimation />
+                  </main>
+                </div>
+              </div>
+            } />
 
-                <Route path="/cost/:projectId" element={
-                  <div style={{ display: 'flex', width: '100%' }}>
-                    <Sidebar />
-                    <div className="app-main">
-                      <Navbar />
-                      <main className="app-content">
-                        <CostEstimation />
-                      </main>
-                    </div>
-                  </div>
-                } />
+          </Routes>
 
-              </Routes>
-
-            </Suspense>
-          </Router>
-        </>
-      )}
-
-    </AuthProvider>
+        </Suspense>
+      </Router>
+    </AuthProvider >
   );
 }
 

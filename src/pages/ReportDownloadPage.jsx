@@ -14,7 +14,7 @@ const ReportDownloadPage = () => {
     useEffect(() => {
         const processDownload = async () => {
             try {
-                // 1. Fetch Workspace Data
+                // 1. Fetch Workspace Data and Plan Status
                 const authToken = localStorage.getItem('token');
                 if (!authToken) {
                     setStatus('error');
@@ -22,11 +22,20 @@ const ReportDownloadPage = () => {
                     return;
                 }
 
-                const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces/${workspaceId}`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
+                // Parallel fetch: Plan + Workspace
+                const [planRes, wsRes] = await Promise.all([
+                    axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/billing/status`, { headers: { 'Authorization': `Bearer ${authToken}` } }),
+                    axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces/${workspaceId}`, { headers: { 'Authorization': `Bearer ${authToken}` } })
+                ]);
 
-                const fullWorkspace = response.data;
+                // Check Subscription
+                const plan = planRes.data;
+                if (!plan || plan.plan !== 'pro') {
+                    setStatus('pro_locked');
+                    return;
+                }
+
+                const fullWorkspace = wsRes.data;
                 // Parse state if string
                 if (typeof fullWorkspace.state_json === 'string') {
                     fullWorkspace.state_json = JSON.parse(fullWorkspace.state_json);
@@ -45,9 +54,8 @@ const ReportDownloadPage = () => {
 
                 // Use the high-res diagram if available from our capture step
                 const diagramImage = fullWorkspace.state_json?.diagramImage;
-                console.log('[REPORT] Diagram image presence:', !!diagramImage);
                 if (diagramImage) {
-                    console.log('[REPORT] Diagram image format:', diagramImage.substring(0, 50) + '...');
+                    // console.log('[REPORT] Diagram image presense check passed');
                 }
 
                 await generateProjectReport(projectData, diagramImage);
@@ -56,13 +64,13 @@ const ReportDownloadPage = () => {
 
                 // 3. Redirect after delay
                 setTimeout(() => {
-                    window.location.href = 'https://cloudiverse.app';
+                    // window.location.href = 'https://cloudiverse.app';
                 }, 4000);
 
             } catch (err) {
                 console.error('Download workflow failed:', err);
                 setStatus('error');
-                setErrorMsg('Failed to generate report. Project might not exist or you lack permissions.');
+                setErrorMsg('Failed to generate report. Project might not exist.');
             }
         };
 
@@ -81,9 +89,36 @@ const ReportDownloadPage = () => {
                         <div className="mx-auto w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                         <div>
                             <h2 className="text-2xl font-bold mb-2">
-                                {status === 'loading' ? 'Locating Project...' : 'Generating PDF Report...'}
+                                {status === 'loading' ? 'Checking Permissions...' : 'Generating PDF Report...'}
                             </h2>
                             <p className="text-gray-400">Please wait while we prepare your professional documentation.</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* PRO LOCKED STATE */}
+                {status === 'pro_locked' && (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="mx-auto w-20 h-20 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                            <AlertCircle className="w-10 h-10 text-yellow-500" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold mb-2">Pro Plan Required</h2>
+                            <p className="text-gray-400 mb-6">
+                                Professional PDF reports with cost breakdown and architecture diagrams are a Pro feature.
+                            </p>
+                            <button
+                                onClick={() => window.location.href = '/settings?tab=billing'}
+                                className="w-full py-3 px-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold transition-all transform hover:scale-105"
+                            >
+                                Upgrade to Pro
+                            </button>
+                            <button
+                                onClick={() => window.history.back()}
+                                className="mt-4 text-sm text-gray-500 hover:text-gray-300"
+                            >
+                                Go Back
+                            </button>
                         </div>
                     </div>
                 )}
@@ -97,13 +132,10 @@ const ReportDownloadPage = () => {
                         <div>
                             <h2 className="text-2xl font-bold mb-2">Report Downloaded!</h2>
                             <p className="text-gray-400 mb-6">Your download has started automatically.</p>
-                            <div className="text-sm text-gray-500 animate-pulse">
-                                Redirecting to Cloudiverse Home...
+                            <div className="text-sm text-gray-500">
+                                You can close this window now.
                             </div>
                         </div>
-                        <a href="https://cloudiverse.app" className="inline-block text-blue-400 hover:text-blue-300 underline">
-                            Go there now
-                        </a>
                     </div>
                 )}
 
@@ -118,7 +150,7 @@ const ReportDownloadPage = () => {
                             <p className="text-red-400">{errorMsg}</p>
                         </div>
                         <button
-                            onClick={() => window.location.href = 'https://cloudiverse.app'}
+                            onClick={() => window.location.href = '/'}
                             className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-semibold transition-colors"
                         >
                             Return Home

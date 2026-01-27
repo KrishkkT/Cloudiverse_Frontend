@@ -67,21 +67,36 @@ const LandingPage = () => {
 
   const pricingPlans = [
     {
-      name: "Free for limited time",
-      price: "$0",
+      name: "Free Tier",
+      price: "\u20B90",
       period: "/month",
-      description: "All features available during beta",
+      description: "Perfect for hobbyists and prototypes",
       features: [
-        "Unlimited projects",
-        "All cloud providers (AWS, GCP, Azure)",
-        "Full cost estimation",
-        "Terraform code generation",
-        "Architecture diagrams",
-        "Community support"
+        "Up to 3 Projects",
+        "Basic AI Models",
+        "Standard Speed",
+        "Community Support",
+        "Limited Exports"
       ],
       cta: "Get Started Free",
+      popular: false
+    },
+    {
+      name: "Pro Plan",
+      price: "\u20B92900",
+      period: "/month",
+      description: "For professional cloud architects",
+      features: [
+        "Unlimited Projects",
+        "Advanced AI Models (Claude 3.5 Sonnet)",
+        "Priority Processing",
+        "Unlimited Exports",
+        "Email Support",
+        "Advanced Security"
+      ],
+      cta: "Upgrade to Pro",
       popular: true,
-      highlight: "🎉 Currently Free - Pricing Coming Soon"
+      highlight: "Most Popular"
     }
   ];
 
@@ -392,6 +407,8 @@ const LandingPage = () => {
               <ul className="space-y-2">
                 <li><a href="/about" className="text-text-secondary hover:text-text-primary transition-colors">About Us</a></li>
                 <li><a href="/contact" className="text-text-secondary hover:text-text-primary transition-colors">Contact</a></li>
+                <li><a href="/service-policy" className="text-text-secondary hover:text-text-primary transition-colors">Shipping Policy</a></li>
+                <li><a href="/cancel-refunds" className="text-text-secondary hover:text-text-primary transition-colors">Cancellations & Refunds</a></li>
                 <li><a href="/feedback" className="text-text-secondary hover:text-text-primary transition-colors">Feedback</a></li>
               </ul>
             </div>

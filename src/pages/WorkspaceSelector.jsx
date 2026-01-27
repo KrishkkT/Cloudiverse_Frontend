@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Building, Clock, DollarSign, Settings, User, Home, LogOut, Loader, Search, LayoutGrid, CheckCircle2, FileCode2, PlusCircle, AlertCircle, Wifi, WifiOff, Filter } from 'lucide-react';
+import { Plus, Building, Clock, DollarSign, Settings, User, Home, LogOut, Loader, Search, LayoutGrid, CheckCircle2, FileCode2, PlusCircle, AlertCircle, Wifi, WifiOff, Filter, Crown } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { generateProjectReport } from '../utils/pdfGenerator';
@@ -16,10 +16,24 @@ const WorkspaceSelector = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [downloadingReportId, setDownloadingReportId] = useState(null);
+  const [isPro, setIsPro] = useState(false);
 
   useEffect(() => {
     fetchWorkspaces();
+    fetchBillingStatus();
   }, []);
+
+  const fetchBillingStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/billing/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsPro((res.data.plan === 'pro' && res.data.status === 'active') || res.data.status === 'canceled_active');
+    } catch (error) {
+      console.error("Failed to fetch billing status", error);
+    }
+  };
 
   const fetchWorkspaces = async () => {
     // ... (existing code, ensure it stays valid)
@@ -200,8 +214,13 @@ const WorkspaceSelector = () => {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
           <div>
-            <h1 className="text-4xl font-extrabold text-text-primary tracking-tight">
+            <h1 className="text-4xl font-extrabold text-text-primary tracking-tight flex items-center gap-3">
               Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-500">{user?.name || 'User'}</span>
+              {isPro && (
+                <span className="px-3 py-1 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 border border-yellow-400/30 rounded-full text-xs font-bold text-yellow-400 flex items-center gap-1 shadow-[0_0_15px_rgba(250,204,21,0.2)]">
+                  <Crown className="w-3.5 h-3.5 fill-yellow-400" /> PRO
+                </span>
+              )}
             </h1>
             <p className="text-text-secondary mt-2 text-lg">Manage and organize your cloud infrastructure projects</p>
           </div>
@@ -209,8 +228,8 @@ const WorkspaceSelector = () => {
             <button onClick={() => navigate('/')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center gap-2 hover:bg-white/10 transition-colors">
               <Home className="w-4 h-4" /> <span>Home</span>
             </button>
-            <button onClick={() => navigate('/profile')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center gap-2 hover:bg-white/10 transition-colors">
-              <User className="w-4 h-4" /> <span>Profile</span>
+            <button onClick={() => navigate('/settings')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center gap-2 hover:bg-white/10 transition-colors">
+              <Settings className="w-4 h-4" /> <span>Settings</span>
             </button>
             <button onClick={handleLogout} className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 font-medium flex items-center gap-2 hover:bg-red-500/20 transition-colors">
               <LogOut className="w-4 h-4" /> <span>Logout</span>
@@ -283,6 +302,16 @@ const WorkspaceSelector = () => {
                   <div className="flex justify-between items-start mb-6">
                     <div className="p-3 bg-background rounded-xl border border-border"><LayoutGrid className="w-6 h-6 text-primary" /></div>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/workspace/${workspace.id}/settings`);
+                        }}
+                        className="p-1.5 text-text-secondary hover:text-primary hover:bg-surface rounded-lg transition-colors"
+                        title="Workspace Settings"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
                       {(workspace.step === 'deployed' || workspace.state_json?.is_deployed === true) && (
                         <>
                           <div className="flex items-center gap-2 bg-surface/50 rounded-full px-3 py-1 border border-border/50" onClick={(e) => e.stopPropagation()}>

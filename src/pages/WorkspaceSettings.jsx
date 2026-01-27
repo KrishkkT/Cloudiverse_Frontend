@@ -9,6 +9,7 @@ const WorkspaceSettings = () => {
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceDescription, setWorkspaceDescription] = useState('');
   const [aiDescription, setAiDescription] = useState('');
+  const [workspaceData, setWorkspaceData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch workspace details
@@ -24,6 +25,7 @@ const WorkspaceSettings = () => {
 
         if (response.ok) {
           const workspace = await response.json();
+          setWorkspaceData(workspace);
           setWorkspaceName(workspace.name);
           setWorkspaceDescription(workspace.description || '');
 
@@ -225,13 +227,31 @@ const WorkspaceSettings = () => {
                 Permanently delete this workspace and all its data. This action cannot be undone.
               </p>
             </div>
-            <button
-              onClick={handleDeleteWorkspace}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Workspace
-            </button>
+            <div className="flex flex-col items-end">
+              {workspaceData?.state_json?.is_deployed === true || workspaceData?.step === 'deployed' ? (
+                <div className="text-right">
+                  <button
+                    disabled
+                    className="px-4 py-2 bg-gray-600 text-white/50 rounded-lg flex items-center cursor-not-allowed opacity-70"
+                    title="Undeploy project to delete"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Workspace
+                  </button>
+                  <p className="text-xs text-red-400 mt-2 font-medium">
+                    Cannot delete active deployment. <br />Undeploy first.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleDeleteWorkspace}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Workspace
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
