@@ -10,13 +10,16 @@ import {
   ChevronRight,
   Star,
   Check,
-  ArrowUp
+  ArrowUp,
+  Menu,
+  X
 } from 'lucide-react';
 import SampleDiagram from '../components/SampleDiagram';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Handle scroll to show/hide scroll-to-top button
   useEffect(() => {
@@ -137,12 +140,12 @@ const LandingPage = () => {
               {localStorage.getItem('token') ? (
                 <button
                   onClick={() => navigate('/workspaces')}
-                  className="bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg transition-colors font-medium"
+                  className="hidden md:block bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg transition-colors font-medium"
                 >
                   Dashboard
                 </button>
               ) : (
-                <>
+                <div className="hidden md:flex items-center space-x-4">
                   <button
                     onClick={() => navigate('/login')}
                     className="text-text-secondary hover:text-text-primary transition-colors"
@@ -155,11 +158,54 @@ const LandingPage = () => {
                   >
                     Sign Up
                   </button>
-                </>
+                </div>
               )}
+              {/* Mobile Menu Button */}
+              <button
+                className="md:hidden p-2 text-text-secondary hover:text-text-primary"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <div className="md:hidden absolute top-16 left-0 right-0 bg-surface border-b border-border p-4 animate-fade-in shadow-xl z-50">
+            <div className="flex flex-col space-y-4">
+              <a href="#features" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">Features</a>
+              <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">Pricing</a>
+              <a href="/docs" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">Docs</a>
+              <a href="/about" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">About</a>
+              <hr className="border-border my-2" />
+              {localStorage.getItem('token') ? (
+                <button
+                  onClick={() => navigate('/workspaces')}
+                  className="bg-primary hover:bg-primary/90 text-white w-full py-3 rounded-lg font-medium"
+                >
+                  Dashboard
+                </button>
+              ) : (
+                <div className="flex flex-col space-y-3">
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="btn btn-secondary w-full"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => navigate('/register')}
+                    className="btn btn-primary w-full"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Hero Section */}

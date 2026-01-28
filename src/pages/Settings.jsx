@@ -58,6 +58,29 @@ const Settings = () => {
         </button>
       </div>
 
+      {/* Mobile Tab Selector */}
+      <div className="md:hidden bg-surface border-b border-white/5 overflow-x-auto">
+        <div className="flex px-4 py-2 space-x-2 min-w-max">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${isActive
+                    ? 'bg-primary text-white'
+                    : 'bg-white/5 text-text-secondary hover:bg-white/10'
+                  }`}
+              >
+                <Icon size={16} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Sidebar Navigation (Desktop) */}
       <div className="hidden md:flex flex-col w-72 border-r border-white/5 bg-surface/30 h-screen sticky top-0 p-6">
         <div className="flex items-center gap-3 mb-10 px-2 cursor-pointer group" onClick={() => navigate('/workspaces')}>
