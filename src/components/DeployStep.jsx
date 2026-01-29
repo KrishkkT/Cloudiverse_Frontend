@@ -114,7 +114,7 @@ const DeployStep = ({
                 workspace_id: workspace.id
             };
 
-            const res = await axios.post(`${API_BASE}/api/cloud/${provider}/connect`, payload, { headers });
+            const res = await axios.post(`${API_BASE}/api/cloud/${provider.toLowerCase()}/connect`, payload, { headers });
 
             if (provider === 'aws') {
                 // AWS doesn't redirect, it shows a link + input
