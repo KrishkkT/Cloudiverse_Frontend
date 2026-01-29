@@ -448,12 +448,12 @@ const ArchitectureStep = ({
                         </div>
                     ) : (
                         <button
-                            onClick={() => !isDeployed && onNext('oneclick')}
+                            onClick={() => onNext('oneclick')}
                             disabled={isDeployed}
-                            className={`p-6 bg-surface border border-border rounded-2xl transition-all group text-left relative hover:border-green-500/50`}
+                            className={`p-6 bg-surface border border-border rounded-2xl transition-all group text-left relative hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/10 cursor-pointer`}
                         >
-                            <div className="absolute top-3 right-3 px-2 py-1 bg-gradient-to-r from-green-400 to-emerald-500 text-black text-[10px] font-bold rounded-full">
-                                COMING SOON
+                            <div className="absolute top-3 right-3 px-2 py-1 bg-gradient-to-r from-green-400 to-emerald-500 text-black text-[10px] font-bold rounded-full animate-pulse">
+                                NEW
                             </div>
                             <div className="flex items-center space-x-4 mb-4">
                                 <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">

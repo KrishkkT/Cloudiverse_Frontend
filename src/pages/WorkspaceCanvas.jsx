@@ -11,11 +11,12 @@ import TerraformStep from '../components/TerraformStep';
 import RequirementsStep from '../components/RequirementsStep';
 import ArchitectureStep from '../components/ArchitectureStep';
 import DeploymentGuide from '../components/DeploymentGuide';
+import DeployStep from '../components/DeployStep';
 
 const WorkspaceCanvas = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const [step, setStep] = useState('input'); // input, processing, question, processing_spec, review_spec
+    const [step, setStep] = useState('input'); // input, processing, question, processing_spec, review_spec, deploy
     const [description, setDescription] = useState('');
     const [history, setHistory] = useState([]);
     const [currentQuestion, setCurrentQuestion] = useState(null);
@@ -252,6 +253,9 @@ const WorkspaceCanvas = () => {
                     }
                     if (savedState.costProfile) {
                         setCostProfile(savedState.costProfile);
+                    }
+                    if (savedState.deploymentMethod) {
+                        setDeploymentMethod(savedState.deploymentMethod);
                     }
                     // Restore selected provider
                     if (savedState.selectedProvider) {
@@ -645,6 +649,8 @@ const WorkspaceCanvas = () => {
         setTimeout(() => handleSaveDraft(true), 100);
     };
 
+
+
     return (
         <div className="flex h-screen bg-background text-white font-inter relative selection:bg-primary/30 transition-all duration-500">
             <Toaster position="top-right" toastOptions={{
@@ -747,8 +753,8 @@ const WorkspaceCanvas = () => {
                             {((architectureData || isDeployed) && step !== 'architecture') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                         </div>
 
-                        {/* Terraform - Only show after choosing Self Deployment */}
-                        {(deploymentMethod === 'self' || isDeployed) && (
+                        {/* Terraform - Only show for Self Deployment path */}
+                        {deploymentMethod === 'self' && (
                             <div
                                 className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
                                 ${(step === 'terraform_view' || step === 'deployment_ready')
@@ -759,6 +765,36 @@ const WorkspaceCanvas = () => {
                                 <span className="material-icons text-sm">code</span>
                                 <span>Terraform</span>
                                 {((feedbackSubmitted || isDeployed) && step !== 'terraform_view' && step !== 'deployment_ready') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            </div>
+                        )}
+
+                        {/* Connection - Show ONLY if 'oneclick' is selected */}
+                        {(deploymentMethod === 'oneclick' || step === 'deploy' || step === 'deployment_processing') && (
+                            <div
+                                className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
+                                ${(step === 'deploy')
+                                        ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
+                                        : ((!costEstimation && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                                onClick={() => (costEstimation || isDeployed) && transitionToStep('deploy')}
+                            >
+                                <span className="material-icons text-sm">link</span>
+                                <span>Connection</span>
+                                {(step === 'deployment_processing' || isDeployed) && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            </div>
+                        )}
+
+                        {/* Resource Deployment - Show ONLY after connection or during processing */}
+                        {(deploymentMethod === 'oneclick' && (step === 'deployment_processing' || isDeployed)) && (
+                            <div
+                                className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
+                                ${(step === 'deployment_processing' || step === 'deployment_ready')
+                                        ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
+                                        : 'text-gray-400 hover:bg-white/5 cursor-pointer'}`}
+                                onClick={() => transitionToStep('deployment_processing')}
+                            >
+                                <span className="material-icons text-sm">rocket_launch</span>
+                                <span>Deployment</span>
+                                {(isDeployed && step !== 'deployment_processing') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                             </div>
                         )}
 
@@ -1055,7 +1091,7 @@ const WorkspaceCanvas = () => {
                                                         <p className="text-white font-medium capitalize prose prose-invert">{currentQuestion.intent?.primary_domain?.replace(/_/g, ' ') || 'Building an application'}</p>
                                                     </div>
                                                     <div>
-                                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Workload Pattern</h4>
+                                                        <h4 className="text-xs font-bold text-white/80 uppercase tracking-widest mb-1">Workload Pattern</h4>
                                                         <p className="text-white/80 text-sm italic">{currentQuestion.intent?.workload_type?.replace(/_/g, ' ') || 'Standard Workload'}</p>
                                                     </div>
 
@@ -1228,9 +1264,10 @@ const WorkspaceCanvas = () => {
                                                     </span>
                                                 </div>
                                             </div>
-                                            <p className="text-xs text-gray-500 mt-4 italic">Based on your description and selected options.</p>
                                         </div>
+                                        <p className="text-xs text-gray-500 mt-4 italic">Based on your description and selected options.</p>
                                     </div>
+
 
                                     {/* SECTION 3: ARCHITECTURE OVERVIEW (Service List) */}
                                     <div className="space-y-4">
@@ -2189,12 +2226,31 @@ const WorkspaceCanvas = () => {
                                         setDeploymentMethod(method);
                                         if (method === 'self') {
                                             transitionToStep('feedback');
-                                        } else {
-                                            toast('One-Click deployment coming soon!', { icon: '🚀' });
+                                        } else if (method === 'oneclick') {
+                                            transitionToStep('deploy');
                                         }
                                     }}
                                     onBack={() => transitionToStep('cost_estimation')}
                                     isDeployed={isDeployed}
+                                />
+                            )}
+
+                            {/* STEP: DEPLOY */}
+                            {step === 'deploy' && (
+                                <DeployStep
+                                    workspace={{
+                                        id,
+                                        project_name: projectData?.name || infraSpec?.project_name,
+                                        state_json: {
+                                            infraSpec,
+                                            costEstimation,
+                                            connection: infraSpec?.connection || costEstimation?.connection || {}
+                                        }
+                                    }}
+                                    selectedProvider={selectedProvider}
+                                    onBack={() => transitionToStep('architecture')}
+                                    onUpdateWorkspace={() => handleSaveDraft(true)}
+                                    onDeploySuccess={() => transitionToStep('deployment_processing')}
                                 />
                             )}
 
@@ -2222,6 +2278,7 @@ const WorkspaceCanvas = () => {
                                     onComplete={() => transitionToStep('deployment_summary')}
                                     onBack={() => transitionToStep('feedback')}
                                     isDeployed={isDeployed}
+                                    onDeploy={() => setIsDeployed(true)}
                                 />
                             )}
 
@@ -2236,6 +2293,49 @@ const WorkspaceCanvas = () => {
                                         <p className="text-xl font-semibold text-white">Analyzing Cloud Costs</p>
                                         <p className="text-gray-400 mt-2">Comparing AWS, GCP, and Azure pricing...</p>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* STEP: DEPLOYMENT PROCESSING (Transition Step) */}
+                            {step === 'deployment_processing' && (
+                                <div className="flex flex-col items-center justify-center min-h-[500px] space-y-12 animate-fade-in py-20">
+                                    <div className="relative">
+                                        <div className="w-32 h-32 rounded-3xl border-2 border-primary/20 rotate-12 animate-pulse"></div>
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="w-16 h-16 rounded-2xl border-4 border-transparent border-t-primary animate-spin"></div>
+                                        </div>
+                                        <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center border border-primary/20 shadow-lg animate-bounce">
+                                            <span className="material-icons text-primary">rocket_launch</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-center space-y-4 max-w-md">
+                                        <h2 className="text-3xl font-extrabold text-white tracking-tight">Provisioning Infrastructure</h2>
+                                        <p className="text-gray-400 leading-relaxed">
+                                            Launching your {selectedProvider} stack with optimized configurations.
+                                            This usually takes a few minutes.
+                                        </p>
+
+                                        <div className="pt-8">
+                                            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                                <div className="h-full bg-gradient-to-r from-blue-500 to-primary animate-progress-indefinite"></div>
+                                            </div>
+                                            <div className="flex justify-between mt-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                                                <span>Initializing API</span>
+                                                <span className="text-primary animate-pulse">Running</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={() => {
+                                            setIsDeployed(true);
+                                            transitionToStep('deployment_ready');
+                                        }}
+                                        className="text-xs text-gray-600 hover:text-gray-400 underline underline-offset-4 decoration-gray-700 mt-10"
+                                    >
+                                        Simulate Completion
+                                    </button>
                                 </div>
                             )}
 
@@ -2417,6 +2517,7 @@ const WorkspaceCanvas = () => {
                 </div>
             </div>
         </div>
+
     );
 };
 

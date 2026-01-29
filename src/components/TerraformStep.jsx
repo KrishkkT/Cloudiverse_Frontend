@@ -15,7 +15,8 @@ const TerraformStep = ({
     onComplete,
     onBack,
     isDeployed,
-    onTerraformLoaded // 🔥 New prop
+    onTerraformLoaded, // 🔥 New prop
+    onDeploy // 🔥 New prop for self-deploy updates
 }) => {
     const [loading, setLoading] = useState(true);
     const [terraformProject, setTerraformProject] = useState(null); // V2: Folder structure
@@ -250,6 +251,7 @@ const TerraformStep = ({
                 }
 
                 setIsSelfDeployed(true);
+                if (onDeploy) onDeploy();
                 toast.success('Project marked as Self-Deployed');
             }, 1000);
 

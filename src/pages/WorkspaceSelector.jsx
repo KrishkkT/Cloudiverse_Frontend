@@ -157,6 +157,16 @@ const WorkspaceSelector = () => {
   };
 
   const handleCreateNewWorkspace = () => {
+    // Free Tier Enforcement
+    if (!isPro && workspaces.length >= 3) {
+      toast.error(
+        <div className="flex flex-col">
+          <span className="font-bold">Free Tier Limit Reached</span>
+          <span className="text-sm">Upgrade to Pro to create unlimited projects.</span>
+        </div>
+      );
+      return;
+    }
     navigate('/workspace/new');
   };
 
@@ -224,17 +234,17 @@ const WorkspaceSelector = () => {
             </h1>
             <p className="text-text-secondary mt-2 text-lg">Manage and organize your cloud infrastructure projects</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center gap-2 hover:bg-white/10 transition-colors">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+            <button onClick={() => navigate('/')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors">
               <Home className="w-4 h-4" /> <span>Home</span>
             </button>
-            <button onClick={() => navigate('/settings')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center gap-2 hover:bg-white/10 transition-colors">
+            <button onClick={() => navigate('/settings')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors">
               <Settings className="w-4 h-4" /> <span>Settings</span>
             </button>
-            <button onClick={handleLogout} className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 font-medium flex items-center gap-2 hover:bg-red-500/20 transition-colors">
+            <button onClick={handleLogout} className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 font-medium flex items-center justify-center gap-2 hover:bg-red-500/20 transition-colors">
               <LogOut className="w-4 h-4" /> <span>Logout</span>
             </button>
-            <button onClick={handleCreateNewWorkspace} className="px-6 py-3 bg-primary text-white rounded-xl font-semibold shadow-lg flex items-center gap-2 hover:shadow-primary/40 transition-all">
+            <button onClick={handleCreateNewWorkspace} className="px-6 py-3 bg-primary text-white rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 hover:shadow-primary/40 transition-all">
               <PlusCircle className="w-5 h-5" /> <span>New Project</span>
             </button>
           </div>

@@ -359,11 +359,11 @@ const LandingPage = () => {
               Currently free during beta. Pricing plans coming soon.
             </p>
           </div>
-          <div className="max-w-lg mx-auto">
+          <div className="flex flex-col md:flex-row gap-8 max-w-5xl mx-auto">
             {pricingPlans.map((plan, index) => (
               <div
                 key={index}
-                className="bg-surface border border-border rounded-2xl p-8 relative ring-2 ring-primary"
+                className="flex-1 w-full bg-surface border border-border rounded-2xl p-8 relative ring-2 ring-primary flex flex-col"
               >
                 {plan.highlight && (
                   <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-primary to-secondary text-white text-sm font-medium px-4 py-1 rounded-full">
@@ -378,7 +378,7 @@ const LandingPage = () => {
                   </div>
                   <p className="text-text-secondary">{plan.description}</p>
                 </div>
-                <ul className="mb-8 space-y-3">
+                <ul className="mb-8 space-y-3 flex-1">
                   {plan.features.map((feature, featureIndex) => (
                     <li key={featureIndex} className="flex items-center">
                       <Check className="h-5 w-5 text-primary mr-2" />
@@ -388,7 +388,7 @@ const LandingPage = () => {
                 </ul>
                 <button
                   onClick={() => navigate('/register')}
-                  className="w-full py-3 rounded-lg font-medium bg-primary hover:bg-primary/90 text-white transition-colors"
+                  className="w-full py-3 rounded-lg font-medium bg-primary hover:bg-primary/90 text-white transition-colors mt-auto"
                 >
                   {plan.cta}
                 </button>
