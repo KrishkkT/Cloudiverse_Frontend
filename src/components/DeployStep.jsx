@@ -38,15 +38,52 @@ const DeployStep = ({
         roleArn: ''
     });
 
-    const infraSpec = workspace?.state_json?.infraSpec || {};
-    const costEstimation = workspace?.state_json?.costEstimation || {};
+    const pollInterval = React.useRef(null);
 
-    const provider = (
-        selectedProvider ||
-        infraSpec.resolved_region?.provider ||
-        costEstimation.recommended?.provider ||
-        'aws'
-    ).toLowerCase();
+    // Clean up polling on unmount
+    useEffect(() => {
+        return () => {
+            if (pollInterval.current) clearInterval(pollInterval.current);
+        };
+    }, []);
+
+    // Listen for popup success message
+    useEffect(() => {
+        const handleMessage = (event) => {
+            if (event.data?.type === 'CLOUD_AUTH_SUCCESS' && event.data.workspaceId === workspace.id) {
+                toast.success("Authentication successful!");
+                onUpdateWorkspace(); // Trigger parent refresh
+                checkConnectionStatus(); // Immediate local check
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [workspace.id, onUpdateWorkspace]);
+
+    const checkConnectionStatus = async () => {
+        if (!workspace?.id) return;
+        try {
+            const res = await axios.get(`${API_BASE}/api/workspaces/${workspace.id}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            const wsState = res.data.state_json || {};
+            const conn = wsState.connection;
+
+            if (conn && conn.provider === provider && conn.status === 'connected') {
+                setConnectionStatus('connected');
+                setConnectionData(conn);
+                if (pollInterval.current) clearInterval(pollInterval.current);
+            }
+        } catch (err) {
+            console.error("Failed to check status", err);
+        }
+    };
+
+    const startPolling = () => {
+        if (pollInterval.current) clearInterval(pollInterval.current);
+        pollInterval.current = setInterval(checkConnectionStatus, 3000);
+    };
 
     useEffect(() => {
         const savedConnection = workspace?.state_json?.connection;
@@ -54,6 +91,7 @@ const DeployStep = ({
             setConnectionStatus('connected');
             setConnectionData(savedConnection);
         } else {
+            // Check query params for manual return
             const params = new URLSearchParams(window.location.search);
             if (params.get('connection') === 'success') {
                 setConnectionStatus('connected');
@@ -62,7 +100,7 @@ const DeployStep = ({
                 window.history.replaceState({}, '', newUrl);
             }
         }
-    }, [workspace]);
+    }, [workspace, provider]);
 
     const handleConnect = async () => {
         setIsLoading(true);
@@ -89,6 +127,7 @@ const DeployStep = ({
                 // Open in new window/tab as requested
                 window.open(res.data.url, '_blank', 'noopener,noreferrer');
                 toast.success(`Opening ${provider.toUpperCase()} Authorization in a new tab...`);
+                startPolling();
             } else {
                 toast.error("Failed to generate connection URL");
             }
@@ -101,8 +140,8 @@ const DeployStep = ({
     };
 
     const handleAwsVerify = async () => {
-        if (!awsSetup.roleArn) {
-            toast.error("Please paste your Role ARN first");
+        if (!awsSetup.accountId) {
+            toast.error("Please enter your AWS Account ID");
             return;
         }
 
@@ -113,7 +152,7 @@ const DeployStep = ({
 
             const payload = {
                 workspace_id: workspace.id,
-                role_arn: awsSetup.roleArn,
+                account_id: awsSetup.accountId,
                 external_id: awsSetup.externalId
             };
 
@@ -256,60 +295,67 @@ const DeployStep = ({
                                     <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-left">
                                         <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
                                             <span className="material-icons text-sm">info</span>
-                                            Step 1: Create IAM Role
+                                            Step 1: Create IAM Role (Quick Create)
                                         </h4>
                                         <p className="text-xs text-gray-400 mb-4">
-                                            Click the button below to open the AWS Console. It will create a cross-account role that allows Cloudiverse to manage your resources securely using an ExternalID.
+                                            Click the button below to open the AWS Console. It will create a cross-account role with safe permissions for Cloudiverse.
                                         </p>
-                                        <a
-                                            href={awsSetup.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors"
-                                        >
-                                            <span className="material-icons text-xs">open_in_new</span>
-                                            Launch CloudFormation Template
-                                        </a>
+                                        <div className="flex flex-col gap-2">
+                                            <a
+                                                href={awsSetup.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={() => {
+                                                    toast.success("Opening CloudFormation Quick Create...");
+                                                    startPolling();
+                                                }}
+                                                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors w-fit"
+                                            >
+                                                <span className="material-icons text-xs">open_in_new</span>
+                                                Launch CloudFormation Stack
+                                            </a>
+                                            <div className="text-[10px] text-gray-500">
+                                                * You will be redirected to AWS Console. Click "Create stack" on the review page.
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div className="text-left space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-xs text-gray-400 uppercase font-bold tracking-widest">Step 2: Paste Role ARN</label>
-                                            <div className="group relative">
-                                                <span className="material-icons text-gray-500 text-xs cursor-help hover:text-blue-400 transition-colors">help_outline</span>
-                                                <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-gray-900 border border-white/10 rounded-xl text-[10px] text-gray-300 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
-                                                    <p className="font-bold text-white mb-1">Where to find this?</p>
-                                                    1. Go to AWS Console &gt; CloudFormation.<br />
-                                                    2. Select the "CloudiverseAccess" stack.<br />
-                                                    3. Click the <strong>Outputs</strong> tab.<br />
-                                                    4. Copy the value for <strong>RoleArn</strong>.
-                                                </div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                            Step 2: Enter Your AWS Account ID
+                                        </label>
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <span className="material-icons text-gray-500 text-sm">badge</span>
                                             </div>
+                                            <input
+                                                type="text"
+                                                value={awsSetup.accountId || ''}
+                                                onChange={(e) => setAwsSetup(prev => ({ ...prev, accountId: e.target.value }))}
+                                                placeholder="e.g. 123456789012"
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50 transition-colors font-mono"
+                                            />
                                         </div>
-                                        <input
-                                            type="text"
-                                            placeholder="arn:aws:iam::123456789012:role/CloudiverseAccessRole"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-sm focus:border-blue-500 outline-none transition-all placeholder:opacity-20"
-                                            value={awsSetup.roleArn}
-                                            onChange={(e) => setAwsSetup(prev => ({ ...prev, roleArn: e.target.value }))}
-                                        />
+                                        <p className="text-[10px] text-gray-500">
+                                            We need this to construct the Role ARN (`arn:aws:iam::YOUR_ID:role/cloudiverse-deploy-role`).
+                                        </p>
                                     </div>
 
                                     <button
                                         onClick={handleAwsVerify}
-                                        disabled={isLoading || !awsSetup.roleArn}
-                                        className="w-full px-12 py-4 bg-white text-black hover:bg-gray-100 rounded-2xl font-black shadow-2xl transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4 mx-auto"
+                                        disabled={isLoading || !awsSetup.accountId}
+                                        className={`w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all ${isLoading || !awsSetup.accountId
+                                                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-blue-500/25 active:scale-[0.98]'
+                                            }`}
                                     >
                                         {isLoading ? (
-                                            <>
-                                                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
-                                                <span>VERIFYING ACCESS...</span>
-                                            </>
+                                            <span className="flex items-center justify-center gap-2">
+                                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                                Verifying...
+                                            </span>
                                         ) : (
-                                            <>
-                                                <span>VERIFY & CONNECT</span>
-                                                <span className="material-icons">task_alt</span>
-                                            </>
+                                            "Verify & Connect"
                                         )}
                                     </button>
                                 </div>
@@ -326,7 +372,7 @@ const DeployStep = ({
                                                 <div className="w-6 h-6 bg-blue-500/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
                                                     <span className="text-xs font-bold text-blue-400">1</span>
                                                 </div>
-                                                <p className="text-sm text-gray-400 leading-snug">Click the button below to open the official <strong>{provider === 'gcp' ? 'Google' : 'Microsoft'}</strong> portal in a new tab.</p>
+                                                <p className="text-sm text-gray-400 leading-snug">Click the button below to open the official portal in a new tab.</p>
                                             </li>
                                             <li className="flex items-start gap-4">
                                                 <div className="w-6 h-6 bg-blue-500/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
