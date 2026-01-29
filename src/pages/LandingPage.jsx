@@ -86,7 +86,7 @@ const LandingPage = () => {
     },
     {
       name: "Pro Plan",
-      price: "\u20B92900",
+      price: "\u20B9999",
       period: "/month",
       description: "For professional cloud architects",
       features: [
