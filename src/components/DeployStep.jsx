@@ -28,6 +28,7 @@ const DeployStep = ({
     onUpdateWorkspace,
     onDeploySuccess
 }) => {
+    const provider = selectedProvider;
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const [connectionData, setConnectionData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -345,8 +346,8 @@ const DeployStep = ({
                                         onClick={handleAwsVerify}
                                         disabled={isLoading || !awsSetup.accountId}
                                         className={`w-full py-4 rounded-xl font-bold text-sm tracking-wide transition-all ${isLoading || !awsSetup.accountId
-                                                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                                                : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-blue-500/25 active:scale-[0.98]'
+                                            ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-blue-500/25 active:scale-[0.98]'
                                             }`}
                                     >
                                         {isLoading ? (
