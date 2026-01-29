@@ -10,6 +10,10 @@
   ],
   "routes": [
     {
+      "src": "/.well-known/(.*)",
+      "dest": "/.well-known/$1"
+    },
+    {
       "src": "^/assets/(.*)$",
       "headers": {
         "cache-control": "max-age=31536000, immutable"
