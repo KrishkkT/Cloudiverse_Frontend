@@ -72,10 +72,14 @@ const DeployStep = ({
             const wsState = res.data.state_json || {};
             const conn = wsState.connection;
 
-            if (conn && conn.provider === provider && conn.status === 'connected') {
-                setConnectionStatus('connected');
-                setConnectionData(conn);
-                if (pollInterval.current) clearInterval(pollInterval.current);
+            if (conn && conn.provider === provider) {
+                if (conn.status === 'connected') {
+                    setConnectionStatus('connected');
+                    setConnectionData(conn);
+                    if (pollInterval.current) clearInterval(pollInterval.current);
+                } else if (conn.status === 'pending') {
+                    setConnectionStatus('pending');
+                }
             }
         } catch (err) {
             console.error("Failed to check status", err);
@@ -127,7 +131,8 @@ const DeployStep = ({
                 toast.success("AWS setup link generated. Please create the role in your AWS console.");
             } else if (res.data.url) {
                 // Open in new window/tab as requested
-                window.open(res.data.url, '_blank', 'noopener,noreferrer');
+                // remove noopener to allow communication back to parent
+                window.open(res.data.url, 'CloudAuth', 'width=600,height=700');
                 toast.success(`Opening ${provider.toUpperCase()} Authorization in a new tab...`);
                 startPolling();
             } else {
@@ -147,6 +152,27 @@ const DeployStep = ({
             return;
         }
 
+        const roleArn = `arn:aws:iam::${awsSetup.accountId}:role/CloudiverseAccessRole-${awsSetup.externalId}`;
+        console.log("Verifying ARN:", roleArn);
+
+        await performVerification({
+            role_arn: roleArn,
+            external_id: awsSetup.externalId,
+            account_id: awsSetup.accountId
+        });
+    };
+
+    const handleManualVerify = async () => {
+        // For AWS, we need the form data, so we stick to the specific handler if it's AWS
+        if (provider === 'aws') {
+            handleAwsVerify();
+        } else {
+            // GCP/Azure just need workspace context, handled in performVerification
+            await performVerification({});
+        }
+    };
+
+    const performVerification = async (extraMetadata = {}) => {
         setIsLoading(true);
         try {
             const token = localStorage.getItem('token');
@@ -154,15 +180,15 @@ const DeployStep = ({
 
             const payload = {
                 workspace_id: workspace.id,
-                account_id: awsSetup.accountId,
-                external_id: awsSetup.externalId
+                ...extraMetadata
             };
 
-            const res = await axios.post(`${API_BASE}/api/cloud/aws/verify`, payload, { headers });
+            // Call the NEW generic verification endpoint
+            const res = await axios.post(`${API_BASE}/api/cloud/${provider.toLowerCase()}/verify`, payload, { headers });
 
             setConnectionStatus('connected');
             setConnectionData(res.data.connection);
-            toast.success("AWS Connection Verified!");
+            toast.success(`${provider.toUpperCase()} Connection Verified!`);
 
             if (onUpdateWorkspace) {
                 onUpdateWorkspace({
@@ -174,8 +200,9 @@ const DeployStep = ({
                 });
             }
         } catch (err) {
-            console.error("AWS Verify Error:", err);
-            toast.error(err.response?.data?.msg || "Verification failed");
+            console.error("Verification Error:", err);
+            const msg = err.response?.data?.msg || err.response?.data?.error || "Verification failed";
+            toast.error(msg);
         } finally {
             setIsLoading(false);
         }
@@ -412,17 +439,27 @@ const DeployStep = ({
                             )}
 
                             {/* Manual Verify / Fallback Button for ALL Providers */}
-                            <div className="mt-8 flex justify-center">
+                            <div className="mt-8 flex flex-col items-center">
+                                {connectionStatus === 'pending' && (
+                                    <div className="mb-4 text-amber-400 text-sm font-bold flex items-center gap-2 animate-pulse">
+                                        <span className="material-icons text-sm">hourglass_empty</span>
+                                        Verification Pending...
+                                    </div>
+                                )}
+
                                 <button
-                                    onClick={() => {
-                                        toast.success("Checking connection status...");
-                                        checkConnectionStatus();
-                                    }}
+                                    onClick={handleManualVerify}
+                                    disabled={isLoading}
                                     className="text-xs text-gray-500 hover:text-white underline underline-offset-4 transition-colors flex items-center gap-2"
                                 >
-                                    <span className="material-icons text-sm">refresh</span>
-                                    Verify Connection Manually
+                                    <span className={`material-icons text-sm ${isLoading ? 'animate-spin' : ''}`}>
+                                        {isLoading ? 'sync' : 'refresh'}
+                                    </span>
+                                    {isLoading ? 'Verifying...' : 'Verify Connection Manually'}
                                 </button>
+                                <p className="text-[10px] text-gray-600 mt-2">
+                                    Click if auto-verification takes too long.
+                                </p>
                             </div>
 
                             <div className="flex items-center justify-center gap-6 mt-8 opacity-50">

@@ -537,7 +537,7 @@ const WorkspaceCanvas = () => {
                     usageProfile, // 🔥 Persist Usage Profile
                     removedServices, // 🔥 Persist Removed Services
                     diagramImage, // 🔥 Persist high-res snapshot for report
-                    diagramImage, // 🔥 Persist high-res snapshot for report
+
                     selected_provider: selectedProvider,
                     step
                 }
