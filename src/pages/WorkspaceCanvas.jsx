@@ -254,6 +254,19 @@ const WorkspaceCanvas = () => {
                     if (savedState.costProfile) {
                         setCostProfile(savedState.costProfile);
                     }
+                    if (savedState.selected_provider) {
+                        setSelectedProvider(savedState.selected_provider);
+                    } else if (savedState.costEstimation?.recommended?.provider) {
+                        // Fallback to recommended 
+                        setSelectedProvider(savedState.costEstimation.recommended.provider.toUpperCase());
+                    }
+
+                    if (savedState.costEstimation) {
+                        setCostEstimation(savedState.costEstimation);
+                    }
+                    if (savedState.costProfile) {
+                        setCostProfile(savedState.costProfile);
+                    }
                     if (savedState.deploymentMethod) {
                         setDeploymentMethod(savedState.deploymentMethod);
                     }
@@ -524,6 +537,8 @@ const WorkspaceCanvas = () => {
                     usageProfile, // 🔥 Persist Usage Profile
                     removedServices, // 🔥 Persist Removed Services
                     diagramImage, // 🔥 Persist high-res snapshot for report
+                    diagramImage, // 🔥 Persist high-res snapshot for report
+                    selected_provider: selectedProvider,
                     step
                 }
             };

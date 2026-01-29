@@ -411,6 +411,20 @@ const DeployStep = ({
                                 </>
                             )}
 
+                            {/* Manual Verify / Fallback Button for ALL Providers */}
+                            <div className="mt-8 flex justify-center">
+                                <button
+                                    onClick={() => {
+                                        toast.success("Checking connection status...");
+                                        checkConnectionStatus();
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-white underline underline-offset-4 transition-colors flex items-center gap-2"
+                                >
+                                    <span className="material-icons text-sm">refresh</span>
+                                    Verify Connection Manually
+                                </button>
+                            </div>
+
                             <div className="flex items-center justify-center gap-6 mt-8 opacity-50">
                                 <div className="flex items-center gap-2 text-[10px] text-gray-400 uppercase font-bold tracking-widest">
                                     <span className="material-icons text-xs">lock</span>
