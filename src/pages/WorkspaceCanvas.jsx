@@ -254,27 +254,16 @@ const WorkspaceCanvas = () => {
                     if (savedState.costProfile) {
                         setCostProfile(savedState.costProfile);
                     }
+                    // Restore selected provider - PRIORITY: Saved State > Recommended
                     if (savedState.selected_provider) {
+                        console.log("Hydrating Provider from Saved State:", savedState.selected_provider);
                         setSelectedProvider(savedState.selected_provider);
+                    } else if (savedState.connection?.provider) {
+                        console.log("Hydrating Provider from Connection:", savedState.connection.provider);
+                        setSelectedProvider(savedState.connection.provider);
                     } else if (savedState.costEstimation?.recommended?.provider) {
-                        // Fallback to recommended 
-                        setSelectedProvider(savedState.costEstimation.recommended.provider.toUpperCase());
-                    }
-
-                    if (savedState.costEstimation) {
-                        setCostEstimation(savedState.costEstimation);
-                    }
-                    if (savedState.costProfile) {
-                        setCostProfile(savedState.costProfile);
-                    }
-                    if (savedState.deploymentMethod) {
-                        setDeploymentMethod(savedState.deploymentMethod);
-                    }
-                    // Restore selected provider
-                    if (savedState.selectedProvider) {
-                        setSelectedProvider(savedState.selectedProvider);
-                    } else if (savedState.costEstimation?.recommended?.provider) {
-                        // Fallback: extract from cost estimation
+                        // Only fallback if NO explicit selection existed
+                        console.log("Hydrating Provider from Recommendation:", savedState.costEstimation.recommended.provider);
                         setSelectedProvider(savedState.costEstimation.recommended.provider.toUpperCase());
                     }
 

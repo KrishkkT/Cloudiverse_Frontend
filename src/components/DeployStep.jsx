@@ -72,7 +72,7 @@ const DeployStep = ({
             const wsState = res.data.state_json || {};
             const conn = wsState.connection;
 
-            if (conn && conn.provider === provider) {
+            if (conn && conn.provider && conn.provider.toLowerCase() === provider.toLowerCase()) {
                 if (conn.status === 'connected') {
                     setConnectionStatus('connected');
                     setConnectionData(conn);
