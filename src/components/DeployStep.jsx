@@ -31,6 +31,12 @@ const DeployStep = ({
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const [connectionData, setConnectionData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [awsSetup, setAwsSetup] = useState({
+        url: '',
+        externalId: '',
+        accountId: '',
+        roleArn: ''
+    });
 
     const infraSpec = workspace?.state_json?.infraSpec || {};
     const costEstimation = workspace?.state_json?.costEstimation || {};
@@ -51,6 +57,9 @@ const DeployStep = ({
             const params = new URLSearchParams(window.location.search);
             if (params.get('connection') === 'success') {
                 setConnectionStatus('connected');
+                // Clean up URL to keep it "proper"
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, '', newUrl);
             }
         }
     }, [workspace]);
@@ -62,20 +71,70 @@ const DeployStep = ({
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
             const payload = {
-                workspace_id: workspace.id,
-                redirect_url: window.location.href
+                workspace_id: workspace.id
             };
 
             const res = await axios.post(`${API_BASE}/api/cloud/${provider}/connect`, payload, { headers });
 
-            if (res.data.url) {
-                window.location.href = res.data.url;
+            if (provider === 'aws') {
+                // AWS doesn't redirect, it shows a link + input
+                setAwsSetup({
+                    url: res.data.url,
+                    externalId: res.data.extra.externalId,
+                    accountId: res.data.extra.accountId,
+                    roleArn: ''
+                });
+                toast.success("AWS setup link generated. Please create the role in your AWS console.");
+            } else if (res.data.url) {
+                // Open in new window/tab as requested
+                window.open(res.data.url, '_blank', 'noopener,noreferrer');
+                toast.success(`Opening ${provider.toUpperCase()} Authorization in a new tab...`);
             } else {
                 toast.error("Failed to generate connection URL");
             }
         } catch (err) {
             console.error("Connect Error:", err);
             toast.error("Failed to initiate connection");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleAwsVerify = async () => {
+        if (!awsSetup.roleArn) {
+            toast.error("Please paste your Role ARN first");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            const payload = {
+                workspace_id: workspace.id,
+                role_arn: awsSetup.roleArn,
+                external_id: awsSetup.externalId
+            };
+
+            const res = await axios.post(`${API_BASE}/api/cloud/aws/verify`, payload, { headers });
+
+            setConnectionStatus('connected');
+            setConnectionData(res.data.connection);
+            toast.success("AWS Connection Verified!");
+
+            if (onUpdateWorkspace) {
+                onUpdateWorkspace({
+                    ...workspace,
+                    state_json: {
+                        ...workspace.state_json,
+                        connection: res.data.connection
+                    }
+                });
+            }
+        } catch (err) {
+            console.error("AWS Verify Error:", err);
+            toast.error(err.response?.data?.msg || "Verification failed");
         } finally {
             setIsLoading(false);
         }
@@ -129,7 +188,10 @@ const DeployStep = ({
                         />
                         <InfoCard
                             label="Estimated Monthly Cost"
-                            value={costEstimation.recommended?.formatted_cost || 'N/A'}
+                            value={(() => {
+                                const target = costEstimation?.rankings?.find(r => r.provider?.toLowerCase() === provider.toLowerCase());
+                                return target?.formatted_cost || (target?.monthly_cost ? `$${target.monthly_cost.toFixed(2)}` : 'N/A');
+                            })()}
                             subtext="Optimized Profile"
                             icon="payments"
                         />
@@ -189,29 +251,117 @@ const DeployStep = ({
                             <div className="w-20 h-20 bg-blue-500/10 border border-blue-500/30 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
                                 <span className="material-icons text-4xl text-blue-400">cloud_done</span>
                             </div>
-                            <h2 className="text-2xl font-bold text-white mb-3">Connect your {provider.toUpperCase()} Account</h2>
-                            <p className="text-gray-400 mb-10 max-w-lg mx-auto leading-relaxed">
-                                To proceed with the automated deployment, we need to securely link your cloud credentials.
-                                You will be directed to the official {provider === 'aws' ? 'AWS IAM' : provider === 'gcp' ? 'Google Cloud' : 'Azure'} portal to authorize this request.
-                            </p>
+                            {awsSetup.url ? (
+                                <div className="space-y-6 animate-slide-up">
+                                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-left">
+                                        <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                                            <span className="material-icons text-sm">info</span>
+                                            Step 1: Create IAM Role
+                                        </h4>
+                                        <p className="text-xs text-gray-400 mb-4">
+                                            Click the button below to open the AWS Console. It will create a cross-account role that allows Cloudiverse to manage your resources securely using an ExternalID.
+                                        </p>
+                                        <a
+                                            href={awsSetup.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors"
+                                        >
+                                            <span className="material-icons text-xs">open_in_new</span>
+                                            Launch CloudFormation Template
+                                        </a>
+                                    </div>
 
-                            <button
-                                onClick={handleConnect}
-                                disabled={isLoading}
-                                className="px-12 py-5 bg-white text-black hover:bg-gray-100 rounded-2xl font-black shadow-2xl transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-4 mx-auto"
-                            >
-                                {isLoading ? (
-                                    <>
-                                        <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
-                                        <span>ESTABLISHING SECURE LINK...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="uppercase tracking-widest text-sm">Authorize {provider.toUpperCase()} Connection</span>
-                                        <span className="material-icons text-sm">arrow_forward</span>
-                                    </>
-                                )}
-                            </button>
+                                    <div className="text-left space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs text-gray-400 uppercase font-bold tracking-widest">Step 2: Paste Role ARN</label>
+                                            <div className="group relative">
+                                                <span className="material-icons text-gray-500 text-xs cursor-help hover:text-blue-400 transition-colors">help_outline</span>
+                                                <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-gray-900 border border-white/10 rounded-xl text-[10px] text-gray-300 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                                    <p className="font-bold text-white mb-1">Where to find this?</p>
+                                                    1. Go to AWS Console &gt; CloudFormation.<br />
+                                                    2. Select the "CloudiverseAccess" stack.<br />
+                                                    3. Click the <strong>Outputs</strong> tab.<br />
+                                                    4. Copy the value for <strong>RoleArn</strong>.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="arn:aws:iam::123456789012:role/CloudiverseAccessRole"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-sm focus:border-blue-500 outline-none transition-all placeholder:opacity-20"
+                                            value={awsSetup.roleArn}
+                                            onChange={(e) => setAwsSetup(prev => ({ ...prev, roleArn: e.target.value }))}
+                                        />
+                                    </div>
+
+                                    <button
+                                        onClick={handleAwsVerify}
+                                        disabled={isLoading || !awsSetup.roleArn}
+                                        className="w-full px-12 py-4 bg-white text-black hover:bg-gray-100 rounded-2xl font-black shadow-2xl transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4 mx-auto"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
+                                                <span>VERIFYING ACCESS...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span>VERIFY & CONNECT</span>
+                                                <span className="material-icons">task_alt</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <h2 className="text-2xl font-bold text-white mb-3">Connect your {provider.toUpperCase()} Account</h2>
+                                    <div className="bg-white/5 rounded-2xl p-5 mb-10 text-left border border-white/5 max-w-lg mx-auto">
+                                        <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <span className="material-icons text-xs">verified</span>
+                                            Authorization Guide
+                                        </h4>
+                                        <ul className="space-y-4">
+                                            <li className="flex items-start gap-4">
+                                                <div className="w-6 h-6 bg-blue-500/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <span className="text-xs font-bold text-blue-400">1</span>
+                                                </div>
+                                                <p className="text-sm text-gray-400 leading-snug">Click the button below to open the official <strong>{provider === 'gcp' ? 'Google' : 'Microsoft'}</strong> portal in a new tab.</p>
+                                            </li>
+                                            <li className="flex items-start gap-4">
+                                                <div className="w-6 h-6 bg-blue-500/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <span className="text-xs font-bold text-blue-400">2</span>
+                                                </div>
+                                                <p className="text-sm text-gray-400 leading-snug">Sign in and grant permissions. You don't need to copy any codes.</p>
+                                            </li>
+                                            <li className="flex items-start gap-4">
+                                                <div className="w-6 h-6 bg-blue-500/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <span className="text-xs font-bold text-blue-400">3</span>
+                                                </div>
+                                                <p className="text-sm text-gray-400 leading-snug">Once authorized, <strong>come back to this tab</strong> or wait for the new tab to refetch your status.</p>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <button
+                                        onClick={handleConnect}
+                                        disabled={isLoading}
+                                        className="px-12 py-5 bg-white text-black hover:bg-gray-100 rounded-2xl font-black shadow-2xl transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-4 mx-auto"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
+                                                <span>PREPARING...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="uppercase tracking-widest text-sm">Authorize {provider.toUpperCase()} Connection</span>
+                                                <span className="material-icons text-sm">arrow_forward</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </>
+                            )}
 
                             <div className="flex items-center justify-center gap-6 mt-8 opacity-50">
                                 <div className="flex items-center gap-2 text-[10px] text-gray-400 uppercase font-bold tracking-widest">
