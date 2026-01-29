@@ -29,6 +29,7 @@ const DeployStep = ({
     onDeploySuccess
 }) => {
     const provider = selectedProvider;
+    const { costEstimation, infraSpec } = workspace?.state_json || {};
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const [connectionData, setConnectionData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
