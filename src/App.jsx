@@ -46,14 +46,6 @@ import Profile from './pages/Profile';
 function App() {
     const [isHuman, setIsHuman] = useState(false);
 
-    // Optional: Check if already verified in this session to prevent reload-loops
-    useEffect(() => {
-        const verified = sessionStorage.getItem('captcha-verified');
-        if (verified === 'true') {
-            setIsHuman(true);
-        }
-    }, []);
-
     const handleVerified = (token) => {
         // Verified
         setIsHuman(true);
@@ -63,9 +55,9 @@ function App() {
     // Only show Captcha on Homepage
     const isHomePage = window.location.pathname === '/';
 
-    // if (!isHuman && isHomePage) {
-    //     return <CaptchaGate onVerified={handleVerified} />;
-    // }
+    if (!isHuman && isHomePage) {
+        return <CaptchaGate onVerified={handleVerified} />;
+    }
 
     return (
         <Router>
