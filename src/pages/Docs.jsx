@@ -1086,7 +1086,7 @@ const Docs = () => {
                     </div>
                     <h3 className="text-lg font-bold">Ready to build?</h3>
                     <p className="text-text-secondary text-sm">Start a new project now to see Cloudiverse in action.</p>
-                    <button onClick={() => navigate('/workspace/new')} className="bg-primary text-white px-6 py-2 rounded-lg font-bold hover:bg-primary-dark transition-colors">
+                    <button onClick={() => navigate('/workspaces/new')} className="bg-primary text-white px-6 py-2 rounded-lg font-bold hover:bg-primary-dark transition-colors">
                       New Project
                     </button>
                   </div>

@@ -41,7 +41,7 @@ const NewWorkspace = () => {
       if (response.ok) {
         const workspace = await response.json();
         // Navigate to the newly created workspace
-        navigate(`/workspace/${workspace.id}`, { replace: true });
+        navigate(`/workspaces/${workspace.id}`, { replace: true });
       } else {
         const errorData = await response.json();
         // Check for specific device limit flag

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Play, 
-  Server, 
-  Database, 
-  HardDrive, 
+import {
+  Play,
+  Server,
+  Database,
+  HardDrive,
   ChevronRight,
   BarChart3,
   Code,
@@ -48,28 +48,28 @@ const MockWorkflowWorkspace = () => {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.ok) {
         const workspace = await response.json();
         setProjectData({
           name: workspace.name,
           status: workspace.status || 'Draft'
         });
-        
+
         // Load project data if it exists
         if (workspace.project_data) {
-          const projectData = typeof workspace.project_data === 'string' 
-            ? JSON.parse(workspace.project_data) 
+          const projectData = typeof workspace.project_data === 'string'
+            ? JSON.parse(workspace.project_data)
             : workspace.project_data;
-          
+
           if (projectData.appDescription) {
             setAppDescription(projectData.appDescription);
           }
-          
+
           if (projectData.activeStep) {
             setActiveStep(projectData.activeStep);
           }
-          
+
           if (projectData.completedSteps) {
             setCompletedSteps(new Set(projectData.completedSteps));
           }
@@ -214,9 +214,9 @@ resource "aws_vpc" "main" {
           projectData
         }
       };
-      
+
       let response;
-      
+
       if (workspaceId) {
         // Update existing workspace
         response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/workspaces/${workspaceId}`, {
@@ -238,13 +238,13 @@ resource "aws_vpc" "main" {
           body: JSON.stringify(workspaceData)
         });
       }
-      
+
       if (response.ok) {
         const savedWorkspace = await response.json();
         console.log('Workspace saved:', savedWorkspace);
         // If this is a new workspace, redirect to the workspace page
         if (!workspaceId && savedWorkspace.id) {
-          navigate(`/workspace/${savedWorkspace.id}`);
+          navigate(`/workspaces/${savedWorkspace.id}`);
         }
       } else {
         console.error('Failed to save workspace');
@@ -253,19 +253,19 @@ resource "aws_vpc" "main" {
       console.error('Error saving workspace:', error);
     }
   };
-  
+
   // Function to advance to the next step
   const advanceToNextStep = () => {
     const currentIndex = steps.findIndex(step => step.id === activeStep);
-    
+
     // Mark current step as completed
     setCompletedSteps(prev => new Set(prev).add(activeStep));
-    
+
     // Move to next step if available
     if (currentIndex < steps.length - 1) {
       setActiveStep(steps[currentIndex + 1].id);
     }
-    
+
     // Auto-save when advancing
     saveWorkspace();
   };
@@ -279,7 +279,7 @@ resource "aws_vpc" "main" {
           <p className="text-text-secondary mb-8">
             Describe the problem. We'll design the architecture.
           </p>
-          
+
           <div className="bg-elevated border border-border rounded-xl p-6 mb-8">
             <textarea
               value={appDescription}
@@ -288,7 +288,7 @@ resource "aws_vpc" "main" {
               className="w-full h-48 bg-surface border border-border rounded-lg p-4 text-text-primary placeholder-text-subtle focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
             />
           </div>
-          
+
           <button
             onClick={() => {
               setCompletedSteps(new Set().add('problem-definition'));
@@ -317,7 +317,7 @@ resource "aws_vpc" "main" {
             This InfraSpec is deterministic and production-ready.
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Compute */}
           <div className="bg-elevated border border-border rounded-xl p-6">
@@ -344,7 +344,7 @@ resource "aws_vpc" "main" {
               </div>
             </div>
           </div>
-          
+
           {/* Database */}
           <div className="bg-elevated border border-border rounded-xl p-6">
             <div className="flex items-center mb-4">
@@ -366,7 +366,7 @@ resource "aws_vpc" "main" {
               </div>
             </div>
           </div>
-          
+
           {/* Cache */}
           <div className="bg-elevated border border-border rounded-xl p-6">
             <div className="flex items-center mb-4">
@@ -384,7 +384,7 @@ resource "aws_vpc" "main" {
               </div>
             </div>
           </div>
-          
+
           {/* Storage */}
           <div className="bg-elevated border border-border rounded-xl p-6">
             <div className="flex items-center mb-4">
@@ -406,7 +406,7 @@ resource "aws_vpc" "main" {
               </div>
             </div>
           </div>
-          
+
           {/* Networking */}
           <div className="bg-elevated border border-border rounded-xl p-6 md:col-span-2">
             <div className="flex items-center mb-4">
@@ -425,7 +425,7 @@ resource "aws_vpc" "main" {
             </div>
           </div>
         </div>
-        
+
         {/* Accept & Continue Button */}
         <div className="flex justify-center mt-8">
           <button
@@ -449,7 +449,7 @@ resource "aws_vpc" "main" {
             Two approaches to meet your requirements
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Variant A - Cost-Efficient */}
           <div className="bg-elevated border border-border rounded-xl p-6 hover:border-primary/30 transition-colors">
@@ -459,13 +459,13 @@ resource "aws_vpc" "main" {
                 Optimized for minimal operational costs
               </p>
             </div>
-            
+
             <div className="space-y-4 mb-6">
               <div>
                 <h4 className="font-medium text-text-primary mb-2">Cost Range</h4>
                 <p className="text-secondary">{mockData.variants[0].costRange}</p>
               </div>
-              
+
               <div>
                 <h4 className="font-medium text-text-primary mb-2">Trade-offs</h4>
                 <ul className="text-text-secondary space-y-1">
@@ -475,12 +475,12 @@ resource "aws_vpc" "main" {
                 </ul>
               </div>
             </div>
-            
+
             <button className="w-full btn btn-secondary">
               Select Cost-Efficient Variant
             </button>
           </div>
-          
+
           {/* Variant B - Optimized */}
           <div className="bg-elevated border border-border rounded-xl p-6 hover:border-primary/30 transition-colors">
             <div className="mb-6">
@@ -489,13 +489,13 @@ resource "aws_vpc" "main" {
                 Balanced for performance, reliability, and scalability
               </p>
             </div>
-            
+
             <div className="space-y-4 mb-6">
               <div>
                 <h4 className="font-medium text-text-primary mb-2">Cost Range</h4>
                 <p className="text-secondary">{mockData.variants[1].costRange}</p>
               </div>
-              
+
               <div>
                 <h4 className="font-medium text-text-primary mb-2">Trade-offs</h4>
                 <ul className="text-text-secondary space-y-1">
@@ -505,13 +505,13 @@ resource "aws_vpc" "main" {
                 </ul>
               </div>
             </div>
-            
+
             <button className="w-full btn btn-primary">
               Select High-Performance Variant
             </button>
           </div>
         </div>
-        
+
         {/* Accept & Continue Button */}
         <div className="flex justify-center mt-8">
           <button
@@ -535,7 +535,7 @@ resource "aws_vpc" "main" {
             Ranked provider recommendations for your selected variant
           </p>
         </div>
-        
+
         {/* Comparison Matrix */}
         <div className="bg-elevated border border-border rounded-xl overflow-hidden mb-8">
           <table className="w-full">
@@ -568,12 +568,12 @@ resource "aws_vpc" "main" {
             </tbody>
           </table>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Recommendation */}
           <div className="bg-elevated border border-border rounded-xl p-6">
             <h3 className="text-lg font-bold text-text-primary mb-4">Ranked Provider Recommendation</h3>
-            
+
             <div className="flex items-start mb-4">
               <div className="bg-primary/20 p-2 rounded-full mr-3">
                 <BarChart3 size={20} className="text-primary" />
@@ -585,7 +585,7 @@ resource "aws_vpc" "main" {
                 </p>
               </div>
             </div>
-            
+
             <div className="space-y-3">
               <div>
                 <h4 className="font-medium text-text-primary text-sm mb-1">Why AWS?</h4>
@@ -597,11 +597,11 @@ resource "aws_vpc" "main" {
               </div>
             </div>
           </div>
-          
+
           {/* Provider Details */}
           <div className="bg-elevated border border-border rounded-xl p-6">
             <h3 className="text-lg font-bold text-text-primary mb-4">Provider Strengths</h3>
-            
+
             <div className="space-y-4">
               <div>
                 <h4 className="font-medium text-text-primary mb-2">AWS</h4>
@@ -609,14 +609,14 @@ resource "aws_vpc" "main" {
                   Market leader with the most comprehensive cloud services. Strong in compute, storage, and database offerings.
                 </p>
               </div>
-              
+
               <div>
                 <h4 className="font-medium text-text-primary mb-2">Azure</h4>
                 <p className="text-text-secondary text-sm">
                   Excellent integration with Microsoft products. Strong hybrid cloud capabilities.
                 </p>
               </div>
-              
+
               <div>
                 <h4 className="font-medium text-text-primary mb-2">GCP</h4>
                 <p className="text-text-secondary text-sm">
@@ -626,7 +626,7 @@ resource "aws_vpc" "main" {
             </div>
           </div>
         </div>
-        
+
         {/* Accept & Continue Button */}
         <div className="flex justify-center mt-8">
           <button
@@ -649,7 +649,7 @@ resource "aws_vpc" "main" {
           Auto-generated visualization of your cloud infrastructure
         </p>
       </div>
-      
+
       <div className="flex-1 flex flex-col items-center justify-center bg-elevated border border-border rounded-xl p-8">
         <div className="text-center mb-8">
           <Network size={48} className="text-text-subtle mx-auto mb-4" />
@@ -658,7 +658,7 @@ resource "aws_vpc" "main" {
             This visualization is generated from your deterministic InfraSpec and represents your cloud architecture. Export as PNG/SVG.
           </p>
         </div>
-        
+
         <div className="bg-surface border border-border rounded-lg w-full max-w-2xl h-96 flex items-center justify-center">
           <div className="text-center">
             <div className="inline-block bg-surface/50 p-4 rounded-lg mb-4">
@@ -667,7 +667,7 @@ resource "aws_vpc" "main" {
             <p className="text-text-secondary">Architecture Diagram Visualization</p>
           </div>
         </div>
-        
+
         <div className="flex space-x-3 mt-6">
           <button className="btn btn-secondary btn-sm">
             Zoom In
@@ -689,7 +689,7 @@ resource "aws_vpc" "main" {
           </button>
         </div>
       </div>
-      
+
       {/* Accept & Continue Button */}
       <div className="flex justify-center mt-8">
         <button
@@ -712,7 +712,7 @@ resource "aws_vpc" "main" {
             This Terraform is generated from a deterministic InfraSpec.
           </p>
         </div>
-        
+
         <div className="flex space-x-3">
           <button className="btn btn-secondary btn-sm flex items-center">
             <Copy size={16} className="mr-1" />
@@ -724,7 +724,7 @@ resource "aws_vpc" "main" {
           </button>
         </div>
       </div>
-      
+
       <div className="flex flex-1 overflow-auto">
         {/* File Tree */}
         <div className="w-64 bg-surface border-r border-border overflow-y-auto">
@@ -741,7 +741,7 @@ resource "aws_vpc" "main" {
             <div className="py-1.5 px-9 text-sm text-text-subtle">database/</div>
           </div>
         </div>
-        
+
         {/* Code Editor */}
         <div className="flex-1 overflow-auto bg-code-block">
           <pre className="p-6 text-sm text-text-primary font-mono">
@@ -749,7 +749,7 @@ resource "aws_vpc" "main" {
           </pre>
         </div>
       </div>
-      
+
       {/* Accept & Continue Button */}
       <div className="flex justify-center mt-8 p-6">
         <button
@@ -772,10 +772,10 @@ resource "aws_vpc" "main" {
             Step-by-step instructions to deploy your infrastructure
           </p>
         </div>
-        
+
         <div className="bg-elevated border border-border rounded-xl p-6">
           <h3 className="text-lg font-bold text-text-primary mb-4">Deployment Steps</h3>
-          
+
           <div className="space-y-6">
             <div className="flex">
               <div className="flex-shrink-0 mr-4">
@@ -790,7 +790,7 @@ resource "aws_vpc" "main" {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex">
               <div className="flex-shrink-0 mr-4">
                 <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/20 text-primary">
@@ -804,7 +804,7 @@ resource "aws_vpc" "main" {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex">
               <div className="flex-shrink-0 mr-4">
                 <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/20 text-primary">
@@ -818,7 +818,7 @@ resource "aws_vpc" "main" {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex">
               <div className="flex-shrink-0 mr-4">
                 <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/20 text-primary">
@@ -833,7 +833,7 @@ resource "aws_vpc" "main" {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-8 pt-6 border-t border-border">
             <h4 className="font-medium text-text-primary mb-3">Next Steps</h4>
             <ul className="text-text-secondary space-y-2">
@@ -844,7 +844,7 @@ resource "aws_vpc" "main" {
             </ul>
           </div>
         </div>
-        
+
         {/* Accept & Continue Button */}
         <div className="flex justify-center mt-8">
           <button
@@ -903,9 +903,9 @@ resource "aws_vpc" "main" {
             Draft
           </span>
         </div>
-        
+
         <div className="flex items-center space-x-3">
-          <button 
+          <button
             onClick={saveWorkspace}
             className="btn btn-secondary btn-sm flex items-center space-x-1.5"
           >
@@ -922,29 +922,28 @@ resource "aws_vpc" "main" {
           <div className="p-4 border-b border-border">
             <h2 className="text-lg font-semibold text-text-primary">Design Process</h2>
           </div>
-          
+
           <nav className="flex-1 py-4">
             <ul className="space-y-1 px-2">
               {steps.map((step) => {
                 const isActive = step.id === activeStep;
                 const isCompleted = completedSteps.has(step.id);
                 // A step is locked if it's not completed and it's not the first step and the previous step isn't completed
-                const isLocked = step.id !== 'problem-definition' && 
-                  !isCompleted && 
+                const isLocked = step.id !== 'problem-definition' &&
+                  !isCompleted &&
                   !completedSteps.has(steps[steps.findIndex(s => s.id === step.id) - 1]?.id);
-                
+
                 return (
                   <li key={step.id}>
                     <div
-                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 ${
-                        isActive 
-                          ? 'bg-primary/20 text-primary font-medium' 
+                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 ${isActive
+                          ? 'bg-primary/20 text-primary font-medium'
                           : isCompleted
                             ? 'text-text-secondary'
                             : isLocked
                               ? 'text-text-subtle opacity-50 cursor-not-allowed'
                               : 'text-text-subtle'
-                      }`}
+                        }`}
                     >
                       {isCompleted ? (
                         <CheckCircle size={16} className="text-primary" />

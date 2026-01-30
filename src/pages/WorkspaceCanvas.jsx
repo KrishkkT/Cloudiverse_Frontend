@@ -52,6 +52,9 @@ const WorkspaceCanvas = () => {
     const [dbExcluded, setDbExcluded] = useState(false); // Simple boolean for now
     const [removedServices, setRemovedServices] = useState([]); // 🔥 Recycle Bin for services
     const [diagramImage, setDiagramImage] = useState(null); // 🔥 Store high-res architecture snapshot
+    const [isEnhancing, setIsEnhancing] = useState(false);
+    const [lastDescription, setLastDescription] = useState('');
+    const [isEnhanced, setIsEnhanced] = useState(false);
 
     // Detect Drift
     useEffect(() => {
@@ -388,9 +391,50 @@ const WorkspaceCanvas = () => {
         }
     };
 
-    // DEPRECATED: handleConfirmation removed.
-    // If we ever need it back, look at git history.
-    // RESTORED: As per Step1.txt "User Confirmation Gate"
+    const handleEnhanceRequirements = async () => {
+        if (!description || description.trim().length < 10) {
+            toast.error("Please enter a bit more detail first.");
+            return;
+        }
+
+        if (isEnhancing) return;
+
+        setIsEnhancing(true);
+        setLastDescription(description);
+
+        try {
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            const res = await axios.post(`${API_BASE}/api/ai/enhance-requirements`, {
+                text: description
+            }, { headers });
+
+            const enhanced = res.data.enhanced;
+
+            // Smoothly replace the text
+            setDescription(enhanced);
+            setIsEnhanced(true);
+            toast.success("Requirements refined by AI!", {
+                icon: '✨',
+                duration: 4000
+            });
+        } catch (err) {
+            handleApiError(err, "Failed to enhance requirements.");
+        } finally {
+            setIsEnhancing(false);
+        }
+    };
+
+    const handleUndoEnhancement = () => {
+        if (lastDescription) {
+            setDescription(lastDescription);
+            setLastDescription('');
+            setIsEnhanced(false);
+            toast("Reverted to your original text.", { icon: '↩️' });
+        }
+    };
+
     const handleConfirmation = async (approvedAnalysis) => {
         if (isDeployed) return;
 
@@ -813,7 +857,7 @@ const WorkspaceCanvas = () => {
 
                         <div
                             className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all cursor-pointer text-gray-400 hover:bg-white/5`}
-                            onClick={() => navigate(`/workspace/${workspaceId}/settings`)}
+                            onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}
                         >
                             <span className="material-icons text-sm">settings</span>
                             <span>Settings</span>
@@ -995,12 +1039,12 @@ const WorkspaceCanvas = () => {
                                         <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
                                         <div className="relative bg-surface border border-border rounded-2xl p-2 shadow-2xl">
                                             <textarea
-                                                className="w-full h-48 bg-transparent text-xl p-8 focus:outline-none resize-none placeholder-gray-600 text-gray-200 font-light leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed"
-                                                placeholder="e.g., I need a highly scalable e-commerce backend with microservices, handling 50k concurrent users, and strict PCI compliance..."
+                                                className={`w-full h-48 bg-transparent text-xl p-8 focus:outline-none resize-none placeholder-gray-600 text-gray-200 font-light leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-500 ${isEnhancing ? 'opacity-40 filter blur-[1px]' : ''}`}
+                                                placeholder={isEnhancing ? "Refining your requirements into professional language..." : "e.g., I need a highly scalable e-commerce backend with microservices, handling 50k concurrent users, and strict PCI compliance..."}
                                                 value={description}
                                                 onChange={(e) => setDescription(e.target.value)}
-                                                disabled={isDeployed}
-                                                readOnly={isDeployed}
+                                                disabled={isDeployed || isEnhancing}
+                                                readOnly={isDeployed || isEnhancing}
                                             />
                                             <div className="flex justify-between items-center px-8 py-5 bg-white/5 rounded-b-xl border-t border-white/5">
                                                 <div className="flex space-x-2">
@@ -1008,23 +1052,49 @@ const WorkspaceCanvas = () => {
                                                         className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
                                                         disabled={isDeployed}
                                                     >
-                                                        <span className="material-icons text-xl">mic</span>
-                                                    </button>
-
-                                                    <button
-                                                        className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        disabled={isDeployed}
-                                                    >
                                                         <span className="material-icons text-xl">attach_file</span>
                                                     </button>
+
+                                                    <div className="h-6 w-[1px] bg-white/10 mx-1 self-center"></div>
+
+                                                    {!isEnhanced ? (
+                                                        <button
+                                                            onClick={handleEnhanceRequirements}
+                                                            disabled={isDeployed || isEnhancing || !description.trim()}
+                                                            className={`relative group/ai p-2 rounded-lg transition-all duration-500 overflow-hidden
+                                                                ${isEnhancing ? 'bg-primary/20 w-32 justify-center' : 'hover:bg-primary/10'}
+                                                                disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-2`}
+                                                            title="Enhance with AI"
+                                                        >
+                                                            {isEnhancing ? (
+                                                                <>
+                                                                    <div className="w-4 h-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin"></div>
+                                                                    <span className="text-xs font-bold text-primary animate-pulse">Refining...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="material-icons text-xl text-primary group-hover/ai:scale-110 transition-transform animate-pulse-soft">auto_awesome</span>
+                                                                    <div className="absolute inset-0 animate-shimmer pointer-events-none opacity-0 group-hover/ai:opacity-100"></div>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={handleUndoEnhancement}
+                                                            className="flex items-center space-x-1 p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400"
+                                                            title="Undo AI Enhancement"
+                                                        >
+                                                            <span className="material-icons text-lg">undo</span>
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider">Undo</span>
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 {!isDeployed && (
                                                     <button
                                                         onClick={handleAnalyze}
-                                                        className="flex items-center space-x-3 px-8 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all transform hover:scale-[1.02] shadow-lg shadow-primary/20"
+                                                        className={`flex items-center space-x-3 px-8 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all transform hover:scale-[1.02] shadow-lg shadow-primary/20 ${isEnhancing ? 'opacity-50 pointer-events-none scale-95' : ''}`}
                                                     >
                                                         <span>Generate Architecture</span>
-                                                        <span className="material-icons text-lg">auto_awesome</span>
                                                     </button>
                                                 )}
                                             </div>
@@ -1192,7 +1262,7 @@ const WorkspaceCanvas = () => {
                                     <div className="bg-surface border border-border rounded-2xl p-6 shadow-lg relative overflow-hidden">
                                         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[60px] -mr-10 -mt-10"></div>
                                         <button
-                                            onClick={() => navigate(`/workspace/${workspaceId}/settings`)}
+                                            onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}
                                             className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors rounded-lg p-2 hover:bg-white/5"
                                         >
                                             <span className="material-icons text-sm">settings</span>
@@ -2529,8 +2599,26 @@ const WorkspaceCanvas = () => {
                     </div>
                 </div>
             </div>
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                @keyframes shimmer {
+                    0% { background-position: -200% 0; }
+                    100% { background-position: 200% 0; }
+                }
+                .animate-shimmer {
+                    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+                    background-size: 200% 100%;
+                    animation: shimmer 2s infinite;
+                }
+                @keyframes pulse-soft {
+                    0%, 100% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.8; transform: scale(0.98); }
+                }
+                .animate-pulse-soft {
+                    animation: pulse-soft 2s infinite ease-in-out;
+                }
+            `}} />
         </div>
-
     );
 };
 

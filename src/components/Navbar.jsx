@@ -73,7 +73,7 @@ const Navbar = () => {
                     <User size={16} className="text-primary" />
                     <span className="text-sm font-medium">{user.email}</span>
                   </div>
-                  <button onClick={() => { navigate('/dashboard'); setMobileMenuOpen(false); }} className="text-left px-2 py-2 hover:bg-background/50 rounded transition-colors">
+                  <button onClick={() => { navigate('/workspaces'); setMobileMenuOpen(false); }} className="text-left px-2 py-2 hover:bg-background/50 rounded transition-colors">
                     Dashboard
                   </button>
                   <button onClick={() => { navigate('/profile'); setMobileMenuOpen(false); }} className="text-left px-2 py-2 hover:bg-background/50 rounded transition-colors flex items-center gap-2">

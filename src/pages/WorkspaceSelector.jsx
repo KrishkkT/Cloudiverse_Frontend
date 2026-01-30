@@ -167,11 +167,11 @@ const WorkspaceSelector = () => {
       );
       return;
     }
-    navigate('/workspace/new');
+    navigate('/workspaces/new');
   };
 
   const handleSelectWorkspace = (workspaceId) => {
-    navigate(`/workspace/${workspaceId}`);
+    navigate(`/workspaces/${workspaceId}`);
   };
 
   const handleLogout = async () => {
@@ -307,7 +307,7 @@ const WorkspaceSelector = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fade-in-up">
             {filteredWorkspaces.map((workspace) => (
-              <div key={workspace.id} onClick={() => navigate(`/workspace/${workspace.id}`)} className="group relative bg-surface border border-border rounded-2xl overflow-hidden hover:border-primary/50 transition-all cursor-pointer flex flex-col hover:shadow-xl">
+              <div key={workspace.id} onClick={() => navigate(`/workspaces/${workspace.id}`)} className="group relative bg-surface border border-border rounded-2xl overflow-hidden hover:border-primary/50 transition-all cursor-pointer flex flex-col hover:shadow-xl">
                 <div className="p-6 flex-1">
                   <div className="flex justify-between items-start mb-6">
                     <div className="p-3 bg-background rounded-xl border border-border"><LayoutGrid className="w-6 h-6 text-primary" /></div>
@@ -315,7 +315,7 @@ const WorkspaceSelector = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/workspace/${workspace.id}/settings`);
+                          navigate(`/workspaces/${workspace.id}/settings`);
                         }}
                         className="p-1.5 text-text-secondary hover:text-primary hover:bg-surface rounded-lg transition-colors"
                         title="Workspace Settings"

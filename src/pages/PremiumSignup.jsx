@@ -65,13 +65,13 @@ const PremiumSignup = () => {
           className="absolute inset-0 z-0"
         >
           <img
-            src="https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
+            src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
             alt="Background"
             className="w-full h-full object-cover opacity-40 blur-sm"
           />
         </motion.div>
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background-dark/90 via-background-dark/70 to-secondary/20 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background-dark/90 via-background-dark/70 to-primary/20 z-10" />
 
         {/* Floating animated particles */}
         <motion.div
@@ -80,7 +80,7 @@ const PremiumSignup = () => {
             opacity: [0.1, 0.3, 0.1],
           }}
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/20 rounded-full blur-[128px] pointer-events-none z-10"
+          className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[128px] pointer-events-none z-10"
         />
       </div>
 
@@ -97,8 +97,8 @@ const PremiumSignup = () => {
       >
 
         {/* Left Side - Visuals (Inside Card) */}
-        <div className="hidden lg:flex w-5/12 relative flex-col justify-between p-10 overflow-hidden bg-secondary/5">
-          <div className="absolute inset-0 bg-gradient-to-br from-secondary/10 to-transparent z-0" />
+        <div className="hidden lg:flex w-5/12 relative flex-col justify-between p-10 overflow-hidden bg-primary/5">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent z-0" />
 
           <div className="relative z-10 mt-12">
             <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
@@ -111,13 +111,13 @@ const PremiumSignup = () => {
 
           <div className="relative z-10 space-y-4">
             <div className="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
-              <div className="p-2 bg-secondary/20 rounded-full text-secondary">
+              <div className="p-2 bg-primary/20 rounded-full text-primary">
                 <CheckCircle2 size={18} />
               </div>
               <span className="text-sm font-medium text-gray-200">Multi-provider cost comparison</span>
             </div>
             <div className="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
-              <div className="p-2 bg-secondary/20 rounded-full text-secondary">
+              <div className="p-2 bg-primary/20 rounded-full text-primary">
                 <CheckCircle2 size={18} />
               </div>
               <span className="text-sm font-medium text-gray-200">Integrated Cost Estimation</span>
