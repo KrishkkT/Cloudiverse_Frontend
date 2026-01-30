@@ -287,7 +287,93 @@ export const SERVICE_METADATA = {
     "azure ad b2c": { ref: "auth" },
     "service bus": { ref: "messagequeue" },
     "event hubs": { ref: "eventstreaming" },
-    "azure monitor": { ref: "monitoring" }
+    "azure monitor": { ref: "monitoring" },
+
+    // DevOps & CI/CD
+    cicd: {
+        desc: "SaaS for building, testing, and deploying code.",
+        howItWorks: "Pipelines that automatically build, test, and deploy your application on commit.",
+        pros: ["Automated workflows", "Faster feedback loops", "Consistent deployments"],
+        cons: ["Complex configuration", "Build minute costs", "Security management of secrets"],
+        bestFor: ["Automating deployments", "Running unit/integration tests", "Software delivery"],
+        links: {
+            aws: "https://aws.amazon.com/codebuild/",
+            gcp: "https://cloud.google.com/build",
+            azure: "https://azure.microsoft.com/en-us/products/devops/pipelines/"
+        }
+    },
+    sourcecontrol: { ref: "cicd" },
+    buildservice: { ref: "cicd" },
+
+    // Infrastructure as Code (IaC)
+    iac: {
+        desc: "Manage infrastructure using configuration files.",
+        howItWorks: "Stores the state of your infrastructure to track availability and prevent drift.",
+        pros: ["Version controlled infrastructure", "Reproducible environments", "Drift detection"],
+        cons: ["State locking complexity", "Secret management", "Learning curve"],
+        bestFor: ["Managing cloud resources", "Team collaboration", "Auditing changes"],
+        links: {
+            aws: "https://aws.amazon.com/s3/",
+            gcp: "https://cloud.google.com/storage",
+            azure: "https://azure.microsoft.com/en-us/products/storage/blobs/"
+        }
+    },
+    iacstate: { ref: "iac" },
+    statelocking: { ref: "iac" },
+
+    // Configuration & Secrets
+    configuration: {
+        desc: "Centralized configuration and secret management.",
+        howItWorks: "Stores application config and secrets securely, decoupling them from code.",
+        pros: ["Centralized management", "Dynamic updates without redeploy", "Secure secret storage"],
+        cons: ["Single point of failure", "Latency for retrieval", "Caching complexity"],
+        bestFor: ["Feature flags", "Database credentials", "Environment variables"],
+        links: {
+            aws: "https://aws.amazon.com/systems-manager/parameters/",
+            gcp: "https://cloud.google.com/secret-manager",
+            azure: "https://azure.microsoft.com/en-us/products/app-configuration/"
+        }
+    },
+    configmanagement: { ref: "configuration" },
+    parameterstore: { ref: "configuration" },
+
+    // Security & Networking Advanced
+    firewall: {
+        desc: "Network security/firewall service.",
+        howItWorks: "Filters tracking based on IP, port, and protocol rules to secure resources.",
+        pros: ["Granular traffic control", "Defense in depth", "Compliance support"],
+        cons: ["Complexity to manage rules", "Potential connectivity blocks", "Cost for advanced features"],
+        bestFor: ["Protecting VPCs", "Filtering malicious traffic", "Compliance boundaries"],
+        links: {
+            aws: "https://aws.amazon.com/network-firewall/",
+            gcp: "https://cloud.google.com/firewall",
+            azure: "https://azure.microsoft.com/en-us/products/firewall/"
+        }
+    },
+    networkfirewall: { ref: "firewall" },
+    securitygroup: { ref: "firewall" },
+    egressproxy: { ref: "firewall" },
+    vpngateway: { ref: "networking" },
+    internetgateway: { ref: "networking" },
+    transitgateway: { ref: "networking" },
+    subnet: { ref: "networking" },
+
+    // Observability Extensions
+    apm: { ref: "monitoring" },
+    metrics: { ref: "monitoring" },
+    alerting: { ref: "monitoring" },
+    incidentmanagement: { ref: "monitoring" },
+    auditlogging: { ref: "monitoring" },
+    logaggregation: { ref: "monitoring" },
+    dashboard: { ref: "monitoring" },
+
+    // Integration Extensions
+    deadletterqueue: { ref: "messagequeue" },
+    pubsub: { ref: "messagequeue" },
+    kinesisstream: { ref: "eventstreaming" },
+    smsnotification: { ref: "notification" },
+    webhookintegration: { ref: "notification" },
+    batchjob: { ref: "computebatch" }
 };
 
 export const getServiceMetadata = (serviceId, provider) => {

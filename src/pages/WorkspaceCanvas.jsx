@@ -280,6 +280,14 @@ const WorkspaceCanvas = () => {
                         setProjectData(prev => ({ ...prev, ...savedState.projectData }));
                     }
 
+                    // 🔥 Restore Provider Selection
+                    if (savedState.selectedProvider || savedState.selected_provider) {
+                        setSelectedProvider(savedState.selectedProvider || savedState.selected_provider);
+                    } else if (savedState.costEstimation?.recommended?.provider) {
+                        // Fallback to recommended if no selection saved
+                        setSelectedProvider(savedState.costEstimation.recommended.provider);
+                    }
+
                     // Restore Usage Profile
                     if (savedState.usageProfile) {
                         setUsageProfile(savedState.usageProfile);
@@ -527,7 +535,8 @@ const WorkspaceCanvas = () => {
                     removedServices, // 🔥 Persist Removed Services
                     diagramImage, // 🔥 Persist high-res snapshot for report
 
-                    selected_provider: selectedProvider,
+                    selectedProvider, // 🔥 Persist the user's choice (Standardized)
+                    selected_provider: selectedProvider, // Legacy support
                     step
                 }
             };

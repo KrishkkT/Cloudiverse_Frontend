@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, CreditCard, BarChart2, Shield, Settings as SettingsIcon, LogOut, ArrowLeft, LayoutDashboard, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 
 // Sections
 import AccountSection from './settings/AccountSection';
@@ -14,9 +14,13 @@ const Settings = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  // Determine initial tab from URL query param or default to 'account'
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'account';
 
-  // Determine initial tab from URL hash/state or default to 'account'
-  const [activeTab, setActiveTab] = useState('account');
+  const setActiveTab = (tabId) => {
+    setSearchParams({ tab: tabId });
+  };
 
   const tabs = [
     { id: 'account', label: 'Account', icon: User },
@@ -69,8 +73,8 @@ const Settings = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${isActive
-                    ? 'bg-primary text-white'
-                    : 'bg-white/5 text-text-secondary hover:bg-white/10'
+                  ? 'bg-primary text-white'
+                  : 'bg-white/5 text-text-secondary hover:bg-white/10'
                   }`}
               >
                 <Icon size={16} />

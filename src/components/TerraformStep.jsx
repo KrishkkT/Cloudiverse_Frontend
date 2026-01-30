@@ -27,9 +27,17 @@ const TerraformStep = ({
 
     // UI States
     const [isDownloading, setIsDownloading] = useState(false);
-    const [isSelfDeployed, setIsSelfDeployed] = useState(false); // Toggle state
+    const [isSelfDeployed, setIsSelfDeployed] = useState(isDeployed || false); // 🔥 FIX: Initialize from prop
+
+    // 🔥 FIX: Sync deployed state if prop changes (e.g., page navigation)
+    useEffect(() => {
+        if (isDeployed && !isSelfDeployed) {
+            setIsSelfDeployed(true);
+        }
+    }, [isDeployed]);
 
     // ... existing useEffect ...
+
     const fetchTerraform = async () => {
         try {
             // 🔒 PRE-CHECK: Verify Step 3 completed (sizing exists)
@@ -428,16 +436,7 @@ const TerraformStep = ({
                 </div>
                 <div className="flex space-x-3 items-center">
                     <div className="flex space-x-3 items-center">
-                        {/* Live Toggle (Automatically ON after download) */}
-                        {isSelfDeployed && (
-                            <div className="flex items-center space-x-2 bg-green-900/30 border border-green-500/50 px-3 py-1.5 rounded-lg animate-fade-in mr-2">
-                                <div className="relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in">
-                                    <input type="checkbox" name="toggle" id="toggle" checked={true} readOnly className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer translate-x-5 transition-transform duration-200 ease-in bg-green-500 border-green-500" />
-                                    <label htmlFor="toggle" className="toggle-label block overflow-hidden h-5 rounded-full bg-green-300 cursor-pointer"></label>
-                                </div>
-                                <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Self Deployed</span>
-                            </div>
-                        )}
+                        {/* Toggle Removed - Moved to Project Dashboard */}
 
                         <button
                             onClick={copyToClipboard}

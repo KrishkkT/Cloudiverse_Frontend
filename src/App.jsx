@@ -1,143 +1,116 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import Navbar from './components/Navbar';
-import Sidebar from './components/Sidebar';
-import ProtectedRoute from './components/ProtectedRoute';
-import AuthProvider from './context/AuthContext';
+// Context
+import AuthProvider from './context/AuthContext'; // Fixed: Default import
+
+// Components
+import CaptchaGate from './components/CaptchaGate'; // Restoring Turnstile
+
+// Layouts
 import AuthLayout from './layouts/AuthLayout';
-import CaptchaGate from './components/CaptchaGate';   // ✅ added
 
-import './App.css';
+// Pages
+import LandingPage from './pages/LandingPage';
+import PremiumLogin from './pages/PremiumLogin';
+import PremiumSignup from './pages/PremiumSignup';
+import ForgotPassword from './pages/ForgotPassword';
 
-// Lazy pages
-const PremiumLogin = React.lazy(() => import('./pages/PremiumLogin'));
-const PremiumSignup = React.lazy(() => import('./pages/PremiumSignup'));
-const Register = React.lazy(() => import('./pages/Register'));
-const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword'));
-const WorkspaceSelector = React.lazy(() => import('./pages/WorkspaceSelector'));
-const WorkspaceCanvas = React.lazy(() => import('./pages/WorkspaceCanvas'));
-const CloudComparison = React.lazy(() => import('./pages/CloudComparison'));
-const TerraformViewer = React.lazy(() => import('./pages/TerraformViewer'));
-const CostEstimation = React.lazy(() => import('./pages/CostEstimation'));
-const NewWorkspace = React.lazy(() => import('./pages/NewWorkspace'));
-const Profile = React.lazy(() => import('./pages/Profile'));
-const Settings = React.lazy(() => import('./pages/Settings'));
-const WorkspaceSettings = React.lazy(() => import('./pages/WorkspaceSettings'));
-const ReportDownloadPage = React.lazy(() => import('./pages/ReportDownloadPage'));
-const LandingPage = React.lazy(() => import('./pages/LandingPage'));
-const Docs = React.lazy(() => import('./pages/Docs'));
+// Workspace / Dashboard
+import WorkspaceSelector from './pages/WorkspaceSelector';
+import NewWorkspace from './pages/NewWorkspace';
+import WorkspaceCanvas from './pages/WorkspaceCanvas';
+import Settings from './pages/Settings';
+import CostEstimation from './pages/CostEstimation';
+import TerraformViewer from './pages/TerraformViewer';
+import ReportDownloadPage from './pages/ReportDownloadPage';
+import CloudComparison from './pages/CloudComparison';
+import WorkspaceSettings from './pages/WorkspaceSettings';
 
-// Static
-const About = React.lazy(() => import('./pages/About'));
-const Contact = React.lazy(() => import('./pages/Contact'));
-const Terms = React.lazy(() => import('./pages/Terms'));
-const Privacy = React.lazy(() => import('./pages/Privacy'));
-const Security = React.lazy(() => import('./pages/Security'));
-const Compliance = React.lazy(() => import('./pages/Compliance'));
-const Feedback = React.lazy(() => import('./pages/Feedback'));
-const ServicePolicy = React.lazy(() => import('./pages/ServicePolicy'));
-const CancellationRefunds = React.lazy(() => import('./pages/CancellationRefunds'));
-
-const LoadingFallback = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-  </div>
-);
+// Static Pages
+import About from './pages/About';
+import Contact from './pages/Contact';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
+import Compliance from './pages/Compliance';
+import Security from './pages/Security';
+import ServicePolicy from './pages/ServicePolicy';
+import CancellationRefunds from './pages/CancellationRefunds';
+import Docs from './pages/Docs';
+import Feedback from './pages/Feedback';
+import Profile from './pages/Profile';
 
 function App() {
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+    const [isHuman, setIsHuman] = useState(false);
 
-  return (
-    <AuthProvider>
+    // Optional: Check if already verified in this session to prevent reload-loops
+    useEffect(() => {
+        const verified = sessionStorage.getItem('captcha-verified');
+        if (verified === 'true') {
+            setIsHuman(true);
+        }
+    }, []);
 
-      <ToastContainer position="top-right" autoClose={3000} theme="colored" />
+    const handleVerified = (token) => {
+        // Verified
+        setIsHuman(true);
+        sessionStorage.setItem('captcha-verified', 'true');
+    };
 
-      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Suspense fallback={<LoadingFallback />}>
+    if (!isHuman) {
+        return <CaptchaGate onVerified={handleVerified} />;
+    }
 
-          <Routes>
-            {/* Public */}
-            <Route path="/" element={
-              !captchaVerified ? (
-                <CaptchaGate onVerified={() => setCaptchaVerified(true)} />
-              ) : (
-                <LandingPage />
-              )
-            } />
-            <Route path="/docs/:section?" element={<Docs />} />
+    return (
+        <Router>
+            <AuthProvider>
+                <ToastContainer position="top-right" autoClose={3000} theme="dark" />
+                <Routes>
+                    {/* Public Routes */}
+                    <Route path="/" element={<LandingPage />} />
 
-            {/* Static Pages */}
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/security" element={<Security />} />
-            <Route path="/compliance" element={<Compliance />} />
-            <Route path="/service-policy" element={<ServicePolicy />} />
-            <Route path="/cancel-refunds" element={<CancellationRefunds />} />
-            <Route path="/feedback" element={<Feedback />} />
+                    {/* Auth Routes */}
+                    <Route path="/login" element={<AuthLayout><PremiumLogin /></AuthLayout>} />
+                    <Route path="/signup" element={<AuthLayout><PremiumSignup /></AuthLayout>} />
+                    <Route path="/register" element={<AuthLayout><PremiumSignup /></AuthLayout>} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
 
-            {/* Auth */}
-            <Route path="/login" element={<AuthLayout><PremiumLogin /></AuthLayout>} />
-            <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
-            <Route path="/signup" element={<AuthLayout><PremiumSignup /></AuthLayout>} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
+                    {/* Workspace Routes */}
+                    <Route path="/workspaces" element={<WorkspaceSelector />} />
+                    <Route path="/workspaces/new" element={<NewWorkspace />} />
+                    <Route path="/workspaces/:id" element={<WorkspaceCanvas />} />
 
-            {/* Protected App */}
-            <Route path="/workspace" element={<Navigate to="/workspaces" replace />} />
-            <Route path="/workspaces" element={<ProtectedRoute><WorkspaceSelector /></ProtectedRoute>} />
-            <Route path="/report-download/:workspaceId" element={<ProtectedRoute><ReportDownloadPage /></ProtectedRoute>} />
-            <Route path="/workspace/new" element={<ProtectedRoute><NewWorkspace /></ProtectedRoute>} />
-            <Route path="/workspace/:id" element={<WorkspaceCanvas />} />
-            <Route path="/workspace/:id/settings" element={<WorkspaceSettings />} />
-            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                    {/* Workspace Specific Feature Routes */}
+                    <Route path="/workspaces/:id/cost" element={<CostEstimation />} />
+                    <Route path="/workspaces/:id/terraform" element={<TerraformViewer />} />
+                    <Route path="/workspaces/:id/report" element={<ReportDownloadPage />} />
+                    <Route path="/workspaces/:id/settings" element={<WorkspaceSettings />} />
 
-            {/* Layout routes */}
-            <Route path="/comparison/:projectId" element={
-              <div style={{ display: 'flex', width: '100%' }}>
-                <Sidebar />
-                <div className="app-main">
-                  <Navbar />
-                  <main className="app-content">
-                    <CloudComparison />
-                  </main>
-                </div>
-              </div>
-            } />
+                    {/* User Settings */}
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/profile" element={<Profile />} />
 
-            <Route path="/terraform/:projectId" element={
-              <div style={{ display: 'flex', width: '100%' }}>
-                <Sidebar />
-                <div className="app-main">
-                  <Navbar />
-                  <main className="app-content">
-                    <TerraformViewer />
-                  </main>
-                </div>
-              </div>
-            } />
+                    {/* Static Pages */}
+                    <Route path="/about" element={<About />} />
+                    <Route path="/contact" element={<Contact />} />
+                    <Route path="/terms" element={<Terms />} />
+                    <Route path="/privacy" element={<Privacy />} />
+                    <Route path="/compliance" element={<Compliance />} />
+                    <Route path="/security" element={<Security />} />
+                    <Route path="/service-policy" element={<ServicePolicy />} />
+                    <Route path="/cancellation-refunds" element={<CancellationRefunds />} />
+                    <Route path="/docs" element={<Docs />} />
+                    <Route path="/feedback" element={<Feedback />} />
+                    <Route path="/cloud-comparison" element={<CloudComparison />} />
 
-            <Route path="/cost/:projectId" element={
-              <div style={{ display: 'flex', width: '100%' }}>
-                <Sidebar />
-                <div className="app-main">
-                  <Navbar />
-                  <main className="app-content">
-                    <CostEstimation />
-                  </main>
-                </div>
-              </div>
-            } />
-
-          </Routes>
-
-        </Suspense>
-      </Router>
-    </AuthProvider >
-  );
+                    {/* Catch all */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </AuthProvider>
+        </Router>
+    );
 }
 
 export default App;

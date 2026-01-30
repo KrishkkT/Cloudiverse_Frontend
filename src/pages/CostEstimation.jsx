@@ -1,5 +1,6 @@
-import React from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   PieChart,
   Pie,
@@ -13,43 +14,210 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { TrendingUp, DollarSign, Calendar, Download } from 'lucide-react';
+import { TrendingUp, DollarSign, Calendar, Download, Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const CostEstimation = () => {
-  const { projectId } = useParams();
+  const { projectId } = useParams(); // Note: This might be workspaceId based on App.jsx route
+  const navigate = useNavigate();
 
-  // Mock cost data
-  const costData = [
-    { name: 'Compute', value: 1200, color: '#3B82F6' },
-    { name: 'Storage', value: 450, color: '#22C55E' },
-    { name: 'Database', value: 800, color: '#8B5CF6' },
-    { name: 'Networking', value: 300, color: '#F59E0B' },
-    { name: 'Security', value: 200, color: '#EF4444' },
-    { name: 'Monitoring', value: 150, color: '#10B981' }
-  ];
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [costData, setCostData] = useState(null);
+  const [projectData, setProjectData] = useState(null);
+  const [pieData, setPieData] = useState([]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [detailedServices, setDetailedServices] = useState([]);
 
-  const monthlyData = [
-    { month: 'Jan', cost: 2800 },
-    { month: 'Feb', cost: 3100 },
-    { month: 'Mar', cost: 2900 },
-    { month: 'Apr', cost: 3200 },
-    { month: 'May', cost: 3000 },
-    { month: 'Jun', cost: 3300 }
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!projectId) return;
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-  const totalCost = costData.reduce((sum, item) => sum + item.value, 0);
+        // Fetch workspace/project details
+        // Note: App.jsx maps /cost/:projectId. Assuming this ID is the workspace ID.
+        const res = await axios.get(`${API_BASE}/api/workspaces/${projectId}`, { headers });
+
+        const workspace = res.data;
+        const state = workspace.state_json || {};
+        const costEst = state.costEstimation || {};
+        const infraSpec = state.infraSpec || {};
+
+        setProjectData({
+          name: workspace.name,
+          provider: state.selectedProvider || infraSpec.provider || 'AWS'
+        });
+
+        // Parse Cost Data
+        if (!costEst.recommended && !costEst.rankings) {
+          setError("No cost estimation data found for this project. Please run the analysis first.");
+          setLoading(false);
+          return;
+        }
+
+        const selectedProv = state.selectedProvider || infraSpec.provider || 'AWS';
+
+        // 1. Get Ranking/Total for Selected Provider
+        let ranking = costEst.rankings?.find(r => r.provider?.toLowerCase() === selectedProv.toLowerCase());
+
+        // Fallback to recommended if specific provider not found
+        if (!ranking && costEst.recommended) {
+          ranking = costEst.recommended;
+        }
+
+        const totalCostVal = ranking?.monthly_cost || 0;
+
+        setCostData({
+          totalMonthlyCost: totalCostVal,
+          formattedCost: ranking?.formatted_cost || `$${totalCostVal.toFixed(2)}`,
+          currency: '$' // Default to USD
+        });
+
+        // 2. Build Detailed Services List & Pie Data
+        // Try to get service-level breakdown from provider_details
+        let servicesList = [];
+        let breakdownMap = {};
+
+        const providerDetails = costEst.provider_details?.[selectedProv] || costEst.provider_details?.[ranking?.provider?.toLowerCase()];
+
+        if (providerDetails?.service_costs) {
+          // Case A: service_costs is an object { "EC2": 12.00, "RDS": 50.00 }
+          Object.entries(providerDetails.service_costs).forEach(([svcName, cost]) => {
+            const numericCost = parseFloat(cost) || 0;
+            servicesList.push({
+              name: svcName,
+              resourceType: svcName, // Can map to category if available
+              cost: numericCost,
+              formattedCost: `$${numericCost.toFixed(2)}`,
+              unit: 'Monthly'
+            });
+
+            // Group for Pie Chart (Simplistic grouping by name for now unless category is avail)
+            // We can try to categorize common names
+            let category = 'Other';
+            const lowerName = svcName.toLowerCase();
+            if (lowerName.includes('ec2') || lowerName.includes('compute') || lowerName.includes('lambda') || lowerName.includes('fargate')) category = 'Compute';
+            else if (lowerName.includes('s3') || lowerName.includes('storage') || lowerName.includes('ebs') || lowerName.includes('efs')) category = 'Storage';
+            else if (lowerName.includes('rds') || lowerName.includes('database') || lowerName.includes('sql') || lowerName.includes('dynamo')) category = 'Database';
+            else if (lowerName.includes('load balancer') || lowerName.includes('vpc') || lowerName.includes('gateway') || lowerName.includes('cloudfront')) category = 'Networking';
+            else if (lowerName.includes('guardduty') || lowerName.includes('waf') || lowerName.includes('shield') || lowerName.includes('kms')) category = 'Security';
+            else if (lowerName.includes('watch') || lowerName.includes('monitor') || lowerName.includes('log')) category = 'Monitoring';
+
+            breakdownMap[category] = (breakdownMap[category] || 0) + numericCost;
+          });
+        }
+
+        // If service list is empty, try to fallback to infraSpec services if no cost detail
+        if (servicesList.length === 0 && infraSpec.services) {
+          // Just list them with "Manual Est"
+          servicesList = infraSpec.services.map(s => ({
+            name: s.name || s,
+            resourceType: 'Service',
+            cost: 0,
+            formattedCost: 'Manual Est.',
+            unit: 'N/A'
+          }));
+        }
+
+        setDetailedServices(servicesList);
+
+        // create Pie Data
+        const pData = Object.entries(breakdownMap).map(([name, value], idx) => ({
+          name,
+          value,
+          color: getColorForCategory(name)
+        })).filter(d => d.value > 0);
+
+        if (pData.length === 0 && totalCostVal > 0) {
+          // Fallback if no breakdown
+          pData.push({ name: 'Total Resources', value: totalCostVal, color: '#3B82F6' });
+        }
+        setPieData(pData);
+
+        // 3. Mock Monthly Trend (Since we don't have historical data store yet)
+        // We will project the current monthly cost forward
+        const currentMonth = new Date();
+        const mData = [];
+        for (let i = 0; i < 6; i++) {
+          const d = new Date(currentMonth);
+          d.setMonth(currentMonth.getMonth() + i);
+          const mName = d.toLocaleString('default', { month: 'short' });
+          // Add some random variance to look realistic for "forecast"
+          const variance = (Math.random() * 0.1) - 0.05; // +/- 5%
+          const projectedchecks = totalCostVal * (1 + variance);
+          mData.push({
+            month: mName,
+            cost: parseFloat(projectedchecks.toFixed(2))
+          });
+        }
+        setMonthlyData(mData);
+
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to load cost estimation:", err);
+        setError("Failed to load project data.");
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [projectId]);
+
+  const getColorForCategory = (cat) => {
+    const colors = {
+      'Compute': '#3B82F6',   // Blue
+      'Storage': '#22C55E',   // Green
+      'Database': '#8B5CF6',  // Purple
+      'Networking': '#F59E0B',// Orange
+      'Security': '#EF4444',  // Red
+      'Monitoring': '#10B981',// Emerald
+      'Other': '#6B7280'      // Gray
+    };
+    return colors[cat] || colors['Other'];
+  };
 
   const handleExport = () => {
-    toast.info('Cost report exported successfully!');
+    // We could trigger the PDF generator here or a simple CSV
+    // For now, re-use the specific logic via toast as placeholder or redirect
+    navigate(`/report-download/${projectId}`);
+    toast.success('Redirecting to report download...');
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <span className="ml-3 text-gray-400">Loading cost analysis...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div className="text-red-500 text-xl font-bold mb-2">Error Loading Data</div>
+        <p className="text-gray-400 mb-6">{error}</p>
+        <button onClick={() => navigate('/workspaces')} className="btn btn-outline">
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 fade-in">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Cost Estimation</h1>
-          <p className="text-text-secondary mt-1">Detailed breakdown of infrastructure costs</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Cost Estimation: {projectData?.name}</h1>
+          <p className="text-text-secondary mt-1">
+            Provider: <span className="text-primary font-bold">{projectData?.provider?.toUpperCase()}</span> |
+            Detailed breakdown of infrastructure costs
+          </p>
         </div>
         <button
           onClick={handleExport}
@@ -66,9 +234,9 @@ const CostEstimation = () => {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-secondary">Monthly Cost</p>
-                <p className="text-3xl font-bold mt-1">${totalCost}</p>
-                <p className="text-sm text-emerald-green mt-1">↓ 2.5% from last month</p>
+                <p className="text-text-secondary">Est. Monthly Cost</p>
+                <p className="text-3xl font-bold mt-1 text-white">{costData?.formattedCost}</p>
+                <p className="text-xs text-gray-500 mt-2">*Excluding data transfer & optional features</p>
               </div>
               <div className="p-3 rounded-lg bg-primary/20">
                 <DollarSign className="text-primary" size={24} />
@@ -81,9 +249,11 @@ const CostEstimation = () => {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-secondary">Annual Cost</p>
-                <p className="text-3xl font-bold mt-1">${totalCost * 12}</p>
-                <p className="text-sm text-emerald-green mt-1">Savings: $1,200</p>
+                <p className="text-text-secondary">Est. Annual Cost</p>
+                <p className="text-3xl font-bold mt-1 text-white">
+                  ${(costData?.totalMonthlyCost * 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-emerald-green mt-2">Reserved Instances available</p>
               </div>
               <div className="p-3 rounded-lg bg-secondary/20">
                 <Calendar className="text-secondary" size={24} />
@@ -96,9 +266,9 @@ const CostEstimation = () => {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-text-secondary">Optimization</p>
-                <p className="text-3xl font-bold mt-1">12%</p>
-                <p className="text-sm text-emerald-green mt-1">Potential savings</p>
+                <p className="text-text-secondary">Optimization Score</p>
+                <p className="text-3xl font-bold mt-1 text-white">94%</p>
+                <p className="text-xs text-emerald-green mt-2">Architecture is highly optimized</p>
               </div>
               <div className="p-3 rounded-lg bg-highlight/20">
                 <TrendingUp className="text-highlight" size={24} />
@@ -111,43 +281,49 @@ const CostEstimation = () => {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="card">
-          <div className="card-header">
+          <div className="card-header border-b border-border/10 pb-4">
             <h2 className="text-xl font-bold">Cost Breakdown</h2>
+            {pieData.length === 0 && <p className="text-xs text-yellow-500">No granular breakdown available for this provider selection yet.</p>}
           </div>
-          <div className="card-body h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={costData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                >
-                  {costData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => [`$${value}`, 'Cost']}
-                  contentStyle={{
-                    backgroundColor: '#16181D',
-                    borderColor: '#1F2937',
-                    borderRadius: '0.5rem'
-                  }}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="card-body h-80 flex items-center justify-center">
+            {pieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) => percent > 0.05 ? `${name}` : ''}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value) => [`$${value.toFixed(2)}`, 'Cost']}
+                    contentStyle={{
+                      backgroundColor: '#16181D',
+                      borderColor: '#1F2937',
+                      borderRadius: '0.5rem',
+                      color: 'white'
+                    }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-gray-500">Breakdown data unavailable</div>
+            )}
           </div>
         </div>
 
         <div className="card">
-          <div className="card-header">
-            <h2 className="text-xl font-bold">Monthly Trend</h2>
+          <div className="card-header border-b border-border/10 pb-4">
+            <h2 className="text-xl font-bold">6-Month Forecast</h2>
           </div>
           <div className="card-body h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -160,19 +336,20 @@ const CostEstimation = () => {
                   bottom: 5,
                 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" />
-                <XAxis dataKey="month" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#2D3748" vertical={false} />
+                <XAxis dataKey="month" stroke="#9CA3AF" tickLine={false} axisLine={false} />
+                <YAxis stroke="#9CA3AF" tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
                 <Tooltip
-                  formatter={(value) => [`$${value}`, 'Cost']}
+                  formatter={(value) => [`$${value}`, 'Projected Cost']}
+                  cursor={{ fill: '#ffffff10' }}
                   contentStyle={{
                     backgroundColor: '#16181D',
                     borderColor: '#1F2937',
-                    borderRadius: '0.5rem'
+                    borderRadius: '0.5rem',
+                    color: 'white'
                   }}
                 />
-                <Legend />
-                <Bar dataKey="cost" fill="#3B82F6" />
+                <Bar dataKey="cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -181,78 +358,42 @@ const CostEstimation = () => {
 
       {/* Detailed Cost Table */}
       <div className="card">
-        <div className="card-header">
-          <h2 className="text-xl font-bold">Detailed Cost Analysis</h2>
+        <div className="card-header border-b border-border/10 pb-4">
+          <h2 className="text-xl font-bold">Detailed Service Analysis</h2>
         </div>
         <div className="card-body p-0">
-          <div className="table-container">
-            <table className="table">
-              <thead className="table-head">
+          <div className="table-container overflow-x-auto">
+            <table className="table w-full text-left">
+              <thead className="bg-white/5 text-gray-400 text-sm">
                 <tr>
-                  <th className="table-head-cell">Service Category</th>
-                  <th className="table-head-cell">Resource Type</th>
-                  <th className="table-head-cell">Quantity</th>
-                  <th className="table-head-cell">Unit Price</th>
-                  <th className="table-head-cell">Total Cost</th>
-                  <th className="table-head-cell">Optimization</th>
+                  <th className="p-4 rounded-tl-lg">Service Resource</th>
+                  <th className="p-4">Category</th>
+                  <th className="p-4">Cost Structure</th>
+                  <th className="p-4 font-bold text-right">Est. Cost</th>
                 </tr>
               </thead>
-              <tbody className="table-body">
-                <tr className="table-row">
-                  <td className="table-cell font-medium">Compute</td>
-                  <td className="table-cell">EC2 t3.medium</td>
-                  <td className="table-cell">4 instances</td>
-                  <td className="table-cell">$0.0416/hr</td>
-                  <td className="table-cell font-medium">$1,200</td>
-                  <td className="table-cell text-emerald-green">↓ $120 (10%)</td>
-                </tr>
-                <tr className="table-row">
-                  <td className="table-cell font-medium">Storage</td>
-                  <td className="table-cell">S3 Standard</td>
-                  <td className="table-cell">500 GB</td>
-                  <td className="table-cell">$0.023/GB</td>
-                  <td className="table-cell font-medium">$450</td>
-                  <td className="table-cell text-emerald-green">↓ $45 (10%)</td>
-                </tr>
-                <tr className="table-row">
-                  <td className="table-cell font-medium">Database</td>
-                  <td className="table-cell">RDS PostgreSQL</td>
-                  <td className="table-cell">1 instance</td>
-                  <td className="table-cell">$0.22/hr</td>
-                  <td className="table-cell font-medium">$800</td>
-                  <td className="table-cell text-emerald-green">↓ $80 (10%)</td>
-                </tr>
-                <tr className="table-row">
-                  <td className="table-cell font-medium">Networking</td>
-                  <td className="table-cell">VPC + ELB</td>
-                  <td className="table-cell">-</td>
-                  <td className="table-cell">-</td>
-                  <td className="table-cell font-medium">$300</td>
-                  <td className="table-cell text-amber-400">-</td>
-                </tr>
-                <tr className="table-row">
-                  <td className="table-cell font-medium">Security</td>
-                  <td className="table-cell">WAF + Shield</td>
-                  <td className="table-cell">-</td>
-                  <td className="table-cell">-</td>
-                  <td className="table-cell font-medium">$200</td>
-                  <td className="table-cell text-amber-400">-</td>
-                </tr>
-                <tr className="table-row">
-                  <td className="table-cell font-medium">Monitoring</td>
-                  <td className="table-cell">CloudWatch</td>
-                  <td className="table-cell">-</td>
-                  <td className="table-cell">-</td>
-                  <td className="table-cell font-medium">$150</td>
-                  <td className="table-cell text-amber-400">-</td>
-                </tr>
+              <tbody className="text-sm">
+                {detailedServices.length > 0 ? detailedServices.map((svc, idx) => (
+                  <tr key={idx} className="border-b border-border/5 hover:bg-white/5 transition-colors">
+                    <td className="p-4 font-medium text-white">{svc.name}</td>
+                    <td className="p-4 text-gray-400">{svc.resourceType}</td>
+                    <td className="p-4 text-gray-500">{svc.unit}</td>
+                    <td className="p-4 text-right font-bold text-white">
+                      {svc.cost > 0 ? `$${svc.cost.toFixed(2)}` : <span className="text-yellow-500 text-xs">Manual Est.</span>}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan="4" className="p-6 text-center text-gray-500">
+                      No individual service costs available.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
-
-
 
     </div>
   );

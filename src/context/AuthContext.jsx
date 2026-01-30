@@ -143,13 +143,33 @@ const AuthProvider = ({ children }) => {
     window.location.href = '/login';
   };
 
+  const loginWithGoogle = async (credential) => {
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/google`, {
+        token: credential,
+        device_id: deviceId
+      });
+      localStorage.setItem('token', res.data.token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      setUser(res.data.user);
+      return { success: true };
+    } catch (error) {
+      console.error("Google Login failed:", error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Google Login failed'
+      };
+    }
+  };
+
   const value = {
     user,
     loading,
     login,
-    register,
+    signup: register, // Renamed for consistency with UI usage
     logout,
-    updateProfile
+    updateProfile,
+    loginWithGoogle
   };
 
   return (

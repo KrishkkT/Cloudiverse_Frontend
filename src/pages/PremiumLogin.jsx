@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { motion } from 'framer-motion';
 import AuthHeader from '../components/AuthHeader';
+import GoogleLoginButton from '../components/GoogleLoginButton';
 
 const PremiumLogin = () => {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,129 +17,250 @@ const PremiumLogin = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Client-side validation
+
     if (!email || !email.trim()) {
-      toast.error('Please enter your email address', { duration: 4000 });
+      toast.error('Please enter your email address');
       return;
     }
-    
-    if (!password || password.length < 6) {
-      toast.error('Password must be at least 6 characters', { duration: 4000 });
+
+    if (!password) {
+      toast.error('Please enter your password');
       return;
     }
-    
+
     setLoading(true);
 
     try {
-      await login(email, password);
-      toast.success('Login successful! Redirecting...', { duration: 2000 });
-      setTimeout(() => navigate('/workspaces'), 500);
+      const result = await login(email, password);
+
+      if (result.success) {
+        toast.success('Welcome back!');
+        navigate('/workspaces');
+      } else {
+        toast.error(result.error || 'Login failed. Please check your credentials.');
+      }
     } catch (error) {
       console.error('[LOGIN ERROR]', error);
-      
-      // Enhanced error messages
-      let msg = 'Login failed. Please try again.';
-      
-      if (error.response?.status === 401) {
-        msg = 'Invalid email or password. Please check your credentials.';
-      } else if (error.response?.status === 404) {
-        msg = 'Account not found. Please sign up first.';
-      } else if (error.response?.status === 429) {
-        msg = 'Too many login attempts. Please try again later.';
-      } else if (error.response?.status === 500) {
-        msg = 'Server error. Please try again or contact support.';
-      } else if (!error.response) {
-        msg = 'Cannot connect to server. Check your internet connection.';
-      } else {
-        msg = error.response?.data?.message || error.response?.data?.msg || msg;
-      }
-      
-      toast.error(msg, { duration: 5000 });
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (tokenResponse) => {
+    setLoading(true);
+    try {
+      // tokenResponse from useGoogleLogin contains access_token
+      await loginWithGoogle(tokenResponse.access_token);
+      toast.success('Welcome back!');
+      navigate('/workspaces');
+    } catch (err) {
+      console.error("Google Login Error", err);
+      toast.error("Google Login failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="font-display bg-background-light dark:bg-background-dark min-h-screen relative overflow-hidden">
-      <AuthHeader />
+    <div className="h-screen w-full flex flex-col items-center justify-center relative overflow-hidden bg-background-dark pt-20">
+      {/* 1. Full Screen Animated Background */}
+      <div className="absolute inset-0 z-0">
+        <motion.div
+          initial={{ scale: 1.1 }}
+          animate={{
+            scale: [1.1, 1.2, 1.1],
+            rotate: [0, 1, -1, 0],
+          }}
+          transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 z-0"
+        >
+          <img
+            src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
+            alt="Background"
+            className="w-full h-full object-cover opacity-40 blur-sm"
+          />
+        </motion.div>
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background-dark/90 via-background-dark/70 to-primary/20 z-10" />
 
-      {/* Background Gradients (Fixed) */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-tr from-primary/20 via-blue-500/10 to-purple-500/20 rounded-full blur-[120px] pointer-events-none opacity-60 dark:opacity-30 z-0"></div>
+        {/* Floating animated particles */}
+        <motion.div
+          animate={{
+            y: [0, -100, 0],
+            opacity: [0.1, 0.3, 0.1],
+          }}
+          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[128px] pointer-events-none z-10"
+        />
+      </div>
 
-      {/* Main Content Container with Top Padding */}
-      <div className="relative z-10 pt-[72px] min-h-screen flex flex-col items-center justify-center pb-12">
+      <div className="absolute top-0 left-0 w-full z-50">
+        <AuthHeader />
+      </div>
 
-        <div className="w-full max-w-[460px] bg-white/80 dark:bg-card-dark/80 backdrop-blur-2xl rounded-[20px] shadow-2xl border border-white/60 dark:border-white/5 overflow-hidden p-10 box-border mt-8">
+      {/* 2. Centered Glass/Premium Card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative z-20 w-full max-w-5xl bg-surface/60 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:flex-row mx-4 max-h-[80vh] lg:max-h-[750px]"
+      >
+        {/* Left Side - Brand & Testimonial (Professional/Enterprise feel) */}
+        <div className="hidden lg:flex lg:w-5/12 ml-0 bg-surface relative overflow-hidden flex-col justify-between p-12 text-white">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent z-0" />
 
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-blue-500/10 text-primary mb-5 shadow-inner border border-white/20">
-              <span className="material-symbols-outlined text-[28px]">waving_hand</span>
-            </div>
-            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Welcome Back</h2>
-            <p className="text-base text-gray-500 dark:text-gray-400 mt-2 font-medium">Please enter your details to sign in.</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-200">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl bg-white dark:bg-black/20 border-2 border-transparent focus:border-primary/20 dark:focus:border-primary/20 bg-gray-50/50 dark:bg-white/5 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-400 font-medium"
-                placeholder="het@gmail.com"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700 dark:text-gray-200">Password</label>
-              <div className="relative group">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-12 px-4 pr-12 rounded-xl bg-white dark:bg-black/20 border-2 border-transparent focus:border-primary/20 dark:focus:border-primary/20 bg-gray-50/50 dark:bg-white/5 text-gray-900 dark:text-white focus:bg-white dark:focus:bg-black/40 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-400 font-medium"
-                  placeholder="Enter your password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility' : 'visibility_off'}</span>
-                </button>
-              </div>
-
-              <div className="flex justify-end items-center pt-1">
-                <Link to="/forgot-password" className="text-sm font-bold text-primary hover:text-blue-600 transition-colors">
-                  Forgot Password?
-                </Link>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-14 mt-2 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.01] disabled:opacity-70 disabled:hover:scale-100 flex items-center justify-center gap-2 text-lg active:scale-[0.98]"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-              {!loading && <span className="material-symbols-outlined text-[20px] font-bold">arrow_forward</span>}
-            </button>
-          </form>
-
-          <div className="mt-10 pt-6 border-t border-gray-100 dark:border-white/5 text-center">
-            <p className="text-gray-500 dark:text-gray-400 font-medium">
-              Don't have an account?
-              <Link to="/register" className="font-bold text-primary hover:text-blue-600 ml-1 transition-colors">Create account</Link>
+          <div className="relative z-10 mt-12">
+            <h2 className="text-4xl font-bold mb-6 leading-tight">
+              Multi-cloud architecture <br />
+            </h2>
+            <p className="text-gray-300 text-lg leading-relaxed">
+              "Design, deploy, and manage multi-cloud infrastructure from a single workspace."
             </p>
           </div>
 
+          <div className="relative z-10">
+            {/* Decorative abstract lines/shapes */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
+              className="absolute -bottom-24 -left-24 w-64 h-64 border border-white/10 rounded-full z-0 dashed"
+            />
+          </div>
         </div>
-      </div>
+
+        {/* Right Side - Login Form */}
+        <div className="w-full lg:w-7/12 px-6 pt-2 pb-6 sm:px-8 sm:pt-4 sm:pb-8 lg:px-12 lg:pt-6 lg:pb-12 flex flex-col bg-transparent relative overflow-y-auto h-full [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
+          <div className="w-full max-w-sm mx-auto space-y-6 sm:space-y-8">
+            <div className="text-center lg:text-left">
+              <motion.h1
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+                className="text-2xl sm:text-3xl font-bold text-white tracking-tight"
+              >
+                Welcome back
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+                className="mt-2 text-sm sm:text-base text-gray-400"
+              >
+                Sign in to your account to continue.
+              </motion.p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-300 ml-1">Email Address</label>
+                  <div className="relative group">
+                    <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-500 group-focus-within:text-primary transition-colors" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary text-white placeholder:text-gray-600 transition-all outline-none"
+                      placeholder="name@company.com"
+                      required
+                    />
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-sm font-medium text-gray-300">Password</label>
+                    <Link to="/forgot-password" className="text-sm font-medium text-primary hover:text-primary-400 transition-colors">
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-500 group-focus-within:text-primary transition-colors" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-10 py-3 bg-black/20 border border-white/10 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary text-white placeholder:text-gray-600 transition-all outline-none"
+                      placeholder="••••••••"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-gray-500 hover:text-white transition-colors"
+                    >
+                      {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center py-3.5 px-4 bg-primary hover:bg-primary-hover text-white font-semibold rounded-xl transition-all shadow-lg shadow-primary/25 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <span className="border-2 border-white/20 border-t-white rounded-full w-5 h-5 animate-spin mr-2" />
+                ) : null}
+                {loading ? 'Signing in...' : 'Sign in'}
+                {!loading && <ArrowRight className="ml-2 h-5 w-5" />}
+              </motion.button>
+            </form>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="relative my-6"
+            >
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-white/10" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-transparent px-4 text-gray-500 font-medium">Or continue with</span>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.9 }}
+              className="flex justify-center w-full"
+            >
+              <GoogleLoginButton
+                onSuccess={handleGoogleSuccess}
+                onError={() => toast.error('Google Login Failed')}
+                loading={loading}
+                text="Sign in with Google"
+              />
+            </motion.div>
+
+            <p className="text-center text-sm text-gray-400 mt-6">
+              Don't have an account?{' '}
+              <Link to="/register" className="font-semibold text-primary hover:text-primary-400 transition-colors">
+                Create an account
+              </Link>
+            </p>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 };

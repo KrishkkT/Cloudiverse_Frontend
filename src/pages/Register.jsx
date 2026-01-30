@@ -14,25 +14,25 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Enhanced validation
     if (!name || name.trim().length < 2) {
       toast.error('Please enter your full name (at least 2 characters)', { duration: 4000 });
       return;
     }
-    
+
     if (!email || !email.trim()) {
       toast.error('Please enter a valid email address', { duration: 4000 });
       return;
     }
-    
+
     // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       toast.error('Please enter a valid email format', { duration: 4000 });
       return;
     }
-    
+
     setLoading(true);
 
     if (password.length < 6) {
@@ -47,10 +47,10 @@ const Register = () => {
       setTimeout(() => navigate('/workspaces'), 1000);
     } catch (error) {
       console.error('[REGISTER ERROR]', error);
-      
+
       // Enhanced error messages
       let msg = 'Registration failed. Please try again.';
-      
+
       if (error.response?.status === 400) {
         msg = error.response?.data?.message || 'Invalid registration data. Please check your input.';
       } else if (error.response?.status === 409) {
@@ -62,7 +62,7 @@ const Register = () => {
       } else {
         msg = error.response?.data?.message || error.response?.data?.msg || msg;
       }
-      
+
       toast.error(msg, { duration: 5000 });
     } finally {
       setLoading(false);
@@ -136,7 +136,23 @@ const Register = () => {
             </button>
           </form>
 
-          <div className="mt-10 pt-6 border-t border-gray-100 dark:border-white/5 text-center">
+          <div className="mt-8 flex flex-col gap-4">
+            <div className="relative flex items-center justify-center w-full">
+              <div className="absolute w-full border-t border-gray-200 dark:border-white/10"></div>
+              <span className="relative bg-white/80 dark:bg-card-dark/80 px-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Or continue with</span>
+            </div>
+
+            <button
+              type="button"
+              className="w-full h-12 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-700 dark:text-white font-bold rounded-xl transition-all flex items-center justify-center gap-3 shadow-sm hover:shadow-md"
+              onClick={() => toast.info('Google Login coming soon!')}
+            >
+              <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+              <span>Sign up with Google</span>
+            </button>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-white/5 text-center">
             <p className="text-gray-500 dark:text-gray-400 font-medium">
               Already have an account?
               <Link to="/login" className="font-bold text-primary hover:text-blue-600 ml-1 transition-colors">Log in</Link>

@@ -88,10 +88,10 @@ const LandingPage = () => {
       name: "Pro Plan",
       price: "\u20B9999",
       period: "/month",
-      description: "For professional cloud architects",
+      description: "For cloud architects",
       features: [
         "Unlimited Projects",
-        "Advanced AI Models (Claude 3.5 Sonnet)",
+        "Advanced AI Models",
         "Priority Processing",
         "Unlimited Exports",
         "Email Support",
@@ -107,8 +107,7 @@ const LandingPage = () => {
     "Deterministic InfraSpec generation",
     "Built-in error correction and validation",
     "Security best practices baked in",
-    "Multi-provider cost comparison",
-    "No cloud credentials needed"
+    "Multi-provider cost comparison"
   ];
 
   return (
@@ -229,7 +228,7 @@ const LandingPage = () => {
               Design, compare, and generate <span className="text-primary">multi-cloud architecture</span> from plain language
             </h1>
             <p className="text-xl text-text-secondary mb-10 max-w-2xl mx-auto animate-slide-up animation-delay-2000">
-              Turn your app ideas into production-ready cloud infrastructure across AWS, Azure, and GCP with AI-powered automation
+              Turn your app ideas into <span className="text-primary font-medium">interactive architecture diagrams</span> and <span className="text-primary font-medium">precise cost estimates</span>. Generate production-ready Terraform code across AWS, Azure, and GCP with AI.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4 animate-slide-up animation-delay-4000">
               <button
@@ -238,9 +237,6 @@ const LandingPage = () => {
               >
                 Start Free
                 <ChevronRight className="ml-2 h-5 w-5" />
-              </button>
-              <button className="bg-surface hover:bg-surface/80 border border-border text-text-primary px-8 py-4 rounded-lg text-lg font-medium transition-colors hover:border-primary/50">
-                Live Demo
               </button>
             </div>
           </div>
@@ -355,9 +351,6 @@ const LandingPage = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-text-secondary max-w-2xl mx-auto">
-              Currently free during beta. Pricing plans coming soon.
-            </p>
           </div>
           <div className="flex flex-col md:flex-row gap-8 max-w-5xl mx-auto">
             {pricingPlans.map((plan, index) => (
@@ -416,9 +409,6 @@ const LandingPage = () => {
                 Get Started Free
                 <ChevronRight className="ml-2 h-5 w-5" />
               </button>
-              <button className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-8 py-4 rounded-lg text-lg font-medium transition-colors">
-                Schedule a Demo
-              </button>
             </div>
           </div>
         </div>
@@ -470,6 +460,11 @@ const LandingPage = () => {
           </div>
           <div className="pt-8 border-t border-border text-center text-text-secondary">
             <p>&copy; {new Date().getFullYear()} Cloudiverse Architect. All rights reserved.</p>
+            <div className="mt-2 text-sm space-x-4">
+              <a href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</a>
+              <span>•</span>
+              <a href="/terms" className="hover:text-primary transition-colors">Terms of Service</a>
+            </div>
           </div>
         </div>
       </footer>
