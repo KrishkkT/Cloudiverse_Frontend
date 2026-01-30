@@ -8,6 +8,7 @@ import AuthProvider from './context/AuthContext'; // Fixed: Default import
 
 // Components
 import CaptchaGate from './components/CaptchaGate'; // Restoring Turnstile
+import AuthGuard from './components/AuthGuard'; // New: Protects routes
 
 // Layouts
 import AuthLayout from './layouts/AuthLayout';
@@ -78,19 +79,19 @@ function App() {
                     <Route path="/forgot-password" element={<ForgotPassword />} />
 
                     {/* Workspace Routes */}
-                    <Route path="/workspaces" element={<WorkspaceSelector />} />
-                    <Route path="/workspaces/new" element={<NewWorkspace />} />
-                    <Route path="/workspaces/:id" element={<WorkspaceCanvas />} />
+                    <Route path="/workspaces" element={<AuthGuard><WorkspaceSelector /></AuthGuard>} />
+                    <Route path="/workspaces/new" element={<AuthGuard><NewWorkspace /></AuthGuard>} />
+                    <Route path="/workspaces/:id" element={<AuthGuard><WorkspaceCanvas /></AuthGuard>} />
 
                     {/* Workspace Specific Feature Routes */}
-                    <Route path="/workspaces/:id/cost" element={<CostEstimation />} />
-                    <Route path="/workspaces/:id/terraform" element={<TerraformViewer />} />
-                    <Route path="/workspaces/:id/report" element={<ReportDownloadPage />} />
-                    <Route path="/workspaces/:id/settings" element={<WorkspaceSettings />} />
+                    <Route path="/workspaces/:id/cost" element={<AuthGuard><CostEstimation /></AuthGuard>} />
+                    <Route path="/workspaces/:id/terraform" element={<AuthGuard><TerraformViewer /></AuthGuard>} />
+                    <Route path="/workspaces/:id/report" element={<AuthGuard><ReportDownloadPage /></AuthGuard>} />
+                    <Route path="/workspaces/:id/settings" element={<AuthGuard><WorkspaceSettings /></AuthGuard>} />
 
                     {/* User Settings */}
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/profile" element={<Profile />} />
+                    <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
+                    <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
 
                     {/* Static Pages */}
                     <Route path="/about" element={<About />} />
@@ -102,7 +103,7 @@ function App() {
                     <Route path="/service-policy" element={<ServicePolicy />} />
                     <Route path="/cancellation-refunds" element={<CancellationRefunds />} />
                     <Route path="/docs" element={<Docs />} />
-                    <Route path="/feedback" element={<Feedback />} />
+                    <Route path="/feedback" element={<AuthGuard><Feedback /></AuthGuard>} />
                     <Route path="/cloud-comparison" element={<CloudComparison />} />
 
                     {/* Catch all */}

@@ -32,23 +32,27 @@ const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const checkAuth = async () => {
+      console.log("[AUTH] Checking for existing session...");
       const token = localStorage.getItem('token');
       if (token) {
         try {
+          console.log("[AUTH] Token found, verifying with server...");
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          // Fetch user profile from backend
           const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/auth/profile`);
+          console.log("[AUTH] Session verified:", res.data.email);
           setUser(res.data);
         } catch (error) {
-          console.error("Auth check failed:", error);
+          console.error("[AUTH] Verification failed:", error.response?.data?.message || error.message);
           localStorage.removeItem('token');
           delete axios.defaults.headers.common['Authorization'];
           setUser(null);
         }
       } else {
+        console.log("[AUTH] No token found in localStorage.");
         setUser(null);
       }
       setLoading(false);
+      console.log("[AUTH] Initial loading finished.");
     };
 
     checkAuth();
