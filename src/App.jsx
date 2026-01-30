@@ -60,7 +60,10 @@ function App() {
         sessionStorage.setItem('captcha-verified', 'true');
     };
 
-    if (!isHuman) {
+    // Simplified bypass for public/legal routes to satisfy Google Verification Bots
+    const isPublicRoute = ['/', '/privacy', '/terms', '/security', '/compliance', '/about', '/contact', '/docs'].includes(window.location.pathname);
+
+    if (!isHuman && !isPublicRoute) {
         return <CaptchaGate onVerified={handleVerified} />;
     }
 
