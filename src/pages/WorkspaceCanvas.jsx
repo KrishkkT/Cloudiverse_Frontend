@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 import { validateProjectDescription } from '../utils/validation/intentValidator';
+import { getServiceMetadata } from '../data/serviceMetadata';
 
 import FeedbackStep from '../components/FeedbackStep';
 import TerraformStep from '../components/TerraformStep';
 import RequirementsStep from '../components/RequirementsStep';
 import ArchitectureStep from '../components/ArchitectureStep';
 import DeploymentGuide from '../components/DeploymentGuide';
-import DeployStep from '../components/DeployStep';
+import DeployTerraformStep from '../components/DeployTerraformStep';
+import DeployInfrastructureStep from '../components/DeployInfrastructureStep';
+import DeployResourcesStep from '../components/DeployResourcesStep';
 
 const WorkspaceCanvas = () => {
     const { id } = useParams();
@@ -32,6 +36,11 @@ const WorkspaceCanvas = () => {
     const [costProfile, setCostProfile] = useState('cost_effective');
     const [workspaceId, setWorkspaceId] = useState(id === 'new' ? null : id);
     const [selectedProvider, setSelectedProvider] = useState(null); // Explicit selection
+    const [selectedAvailableService, setSelectedAvailableService] = useState(null);
+    const [connection, setConnection] = useState(null); // 🔥 Track cloud connection metadata
+    const [isPopupOpen, setIsPopupOpen] = useState(false);
+
+    // Separate state for architecture/diagram data (derived from infraSpec but distinct)
     const [architectureData, setArchitectureData] = useState(null);
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [requirementsData, setRequirementsData] = useState(null);
@@ -56,6 +65,12 @@ const WorkspaceCanvas = () => {
     const [lastDescription, setLastDescription] = useState('');
     const [isEnhanced, setIsEnhanced] = useState(false);
 
+    // AI Suggestions State
+    const [suggestedServices, setSuggestedServices] = useState([]);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const [userPlan, setUserPlan] = useState('free'); // 🔥 Track user plan
+    const [provisioningState, setProvisioningState] = useState({}); // 🔥 Persistent Provisioning State
+
     // Detect Drift
     useEffect(() => {
         // Only show drift warning if cost estimation exists AND description has actually changed
@@ -67,6 +82,61 @@ const WorkspaceCanvas = () => {
             setIsAssumptionsDrifted(false);
         }
     }, [description, initialDescription, costEstimation]);
+
+    // New: Fetch AI Suggestions Effect
+    useEffect(() => {
+        const fetchSuggestions = async () => {
+            // Only fetch if we have the architecture data loaded and base inputs
+            if (!infraSpec?.original_input || !architectureData?.services) return;
+            // if (suggestedServices.length > 0) return; // Allow refetch on spec change
+
+            setLoadingSuggestions(true);
+            try {
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+                const res = await axios.post(`${API_BASE}/api/architecture/validate-completeness`, {
+                    description: infraSpec.original_input,
+                    current_services: architectureData.services,
+                    catalog: {}
+                }, { headers });
+
+                if (res.data.suggestions) {
+                    setSuggestedServices(res.data.suggestions);
+                }
+            } catch (e) {
+                console.error("Failed to fetch suggestions:", e);
+            } finally {
+                setLoadingSuggestions(false);
+            }
+        };
+
+        if (step === 'review_spec' && !isProcessing) {
+            fetchSuggestions();
+        }
+    }, [step, isProcessing, infraSpec, architectureData]);
+
+    // 🔥 Fetch User Plan on Mount
+    useEffect(() => {
+        const fetchUserPlan = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const res = await axios.get(`${API_BASE}/api/auth/profile`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (res.data.plan?.plan) {
+                    setUserPlan(res.data.plan.plan);
+                    console.log("[WORKSPACE] User Plan:", res.data.plan.plan);
+                }
+            } catch (err) {
+                console.error("Failed to fetch user plan:", err);
+            }
+        };
+        fetchUserPlan();
+    }, []);
 
     const handleApiError = (err, fallbackMsg = "An error occurred") => {
         console.error('[API ERROR]', err);
@@ -243,7 +313,23 @@ const WorkspaceCanvas = () => {
                     setDescription(savedState.description || '');
                     setHistory(savedState.history || []);
                     setCurrentQuestion(savedState.currentQuestion || null);
-                    setInfraSpec(savedState.infraSpec || null);
+                    if (savedState.infraSpec) {
+                        // 🛡️ CORRUPTION CHECK: Verify infraSpec is valid
+                        // If it looks like the diagram object (has architecture prop but no canonical_architecture), reset it.
+                        // The 'alias' bug replaced infraSpec with { architecture: {...}, services: [...] }
+                        const isCorrupted = (!savedState.infraSpec.canonical_architecture && (savedState.infraSpec.nodes || savedState.infraSpec.architecture));
+
+                        if (isCorrupted) {
+                            console.error("[WORKSPACE] Detected corrupted infraSpec (likely overwritten by diagram data). Triggering self-healing.");
+                            toast.error("Project data was corrupted. Restoring to initial state...");
+                            setInfraSpec(null);
+                            setStep('review_spec'); // Force re-analysis
+                        } else {
+                            setInfraSpec(savedState.infraSpec);
+                        }
+                    } else {
+                        setInfraSpec(null);
+                    }
 
                     // Restore AI snapshot for cost estimation (prevents "missing infrastructure" error)
                     if (savedState.aiSnapshot) {
@@ -261,6 +347,10 @@ const WorkspaceCanvas = () => {
                     if (savedState.selected_provider) {
                         console.log("Hydrating Provider from Saved State:", savedState.selected_provider);
                         setSelectedProvider(savedState.selected_provider);
+                    }
+                    if (savedState.connection) {
+                        console.log("Hydrating Connection from Saved State:", savedState.connection);
+                        setConnection(savedState.connection);
                     } else if (savedState.connection?.provider) {
                         console.log("Hydrating Provider from Connection:", savedState.connection.provider);
                         setSelectedProvider(savedState.connection.provider);
@@ -294,6 +384,11 @@ const WorkspaceCanvas = () => {
                     // Restore Usage Profile
                     if (savedState.usageProfile) {
                         setUsageProfile(savedState.usageProfile);
+                    }
+
+                    // Restore Provisioning State
+                    if (savedState.provisioning) {
+                        setProvisioningState(savedState.provisioning);
                     }
 
                     // Restore Removed Services (Recycle Bin)
@@ -554,7 +649,7 @@ const WorkspaceCanvas = () => {
         }, 600);
     };
 
-    const handleSaveDraft = async (silent = false) => {
+    const handleSaveDraft = async (silent = false, overrides = {}) => {
         if (isDeployed) {
             console.log("Draft save skipped: Project is deployed (read-only)");
             return;
@@ -581,6 +676,8 @@ const WorkspaceCanvas = () => {
 
                     selectedProvider, // 🔥 Persist the user's choice (Standardized)
                     selected_provider: selectedProvider, // Legacy support
+                    connection, // 🔥 Persist connection metadata
+                    provisioning: overrides.provisioning || provisioningState, // 🔥 Persist Provisioning State
                     step
                 }
             };
@@ -826,32 +923,47 @@ const WorkspaceCanvas = () => {
                         )}
 
                         {/* Connection - Show ONLY if 'oneclick' is selected */}
-                        {(deploymentMethod === 'oneclick' || step === 'deploy' || step === 'deployment_processing') && (
+                        {(deploymentMethod === 'oneclick' || step === 'terraform_view' || step === 'terraform_provision' || step === 'deploy_resources' || step === 'deployment_ready') && (
                             <div
                                 className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
-                                ${(step === 'deploy')
+                                ${(step === 'terraform_view')
                                         ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
                                         : ((!costEstimation && !isDeployed) ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
-                                onClick={() => (costEstimation || isDeployed) && transitionToStep('deploy')}
+                                onClick={() => (costEstimation || isDeployed) && transitionToStep('terraform_view')}
                             >
                                 <span className="material-icons text-sm">link</span>
                                 <span>Connection</span>
-                                {(step === 'deployment_processing' || isDeployed) && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                                {(step === 'terraform_provision' || step === 'deploy_resources' || step === 'deployment_ready' || isDeployed) && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                             </div>
                         )}
 
-                        {/* Resource Deployment - Show ONLY after connection or during processing */}
-                        {(deploymentMethod === 'oneclick' && (step === 'deployment_processing' || isDeployed)) && (
+                        {/* Provision Infrastructure - Show after connection step or if deploying */}
+                        {(deploymentMethod === 'oneclick' || step === 'terraform_provision' || step === 'deploy_resources' || step === 'deployment_ready') && (
                             <div
                                 className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
-                                ${(step === 'deployment_processing' || step === 'deployment_ready')
+                                ${(step === 'terraform_provision')
                                         ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
-                                        : 'text-gray-400 hover:bg-white/5 cursor-pointer'}`}
-                                onClick={() => transitionToStep('deployment_processing')}
+                                        : (step === 'terraform_view' ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                                onClick={() => (step !== 'terraform_view') && transitionToStep('terraform_provision')}
+                            >
+                                <span className="material-icons text-sm">cloud_upload</span>
+                                <span>Provision</span>
+                                {(step === 'deploy_resources' || step === 'deployment_ready' || isDeployed) && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                            </div>
+                        )}
+
+                        {/* Resource Deployment - Show after provisioning or if deployed */}
+                        {(deploymentMethod === 'oneclick' || step === 'deploy_resources' || step === 'deployment_ready') && (
+                            <div
+                                className={`px-4 py-3 rounded-xl font-medium flex items-center space-x-3 transition-all 
+                                ${(step === 'deploy_resources' || step === 'deployment_ready')
+                                        ? 'bg-primary/10 border border-primary/20 text-primary shadow-lg shadow-primary/5'
+                                        : (step === 'terraform_view' || step === 'terraform_provision' ? 'opacity-50 cursor-not-allowed text-gray-500' : 'text-gray-400 hover:bg-white/5 cursor-pointer')}`}
+                                onClick={() => (step !== 'terraform_view' && step !== 'terraform_provision') && transitionToStep('deploy_resources')}
                             >
                                 <span className="material-icons text-sm">rocket_launch</span>
-                                <span>Deployment</span>
-                                {(isDeployed && step !== 'deployment_processing') && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
+                                <span>Resources</span>
+                                {(step === 'deployment_ready' || isDeployed) && <span className="material-icons text-xs text-green-500 ml-auto">check_circle</span>}
                             </div>
                         )}
 
@@ -1042,7 +1154,13 @@ const WorkspaceCanvas = () => {
                                                 className={`w-full h-48 bg-transparent text-xl p-8 focus:outline-none resize-none placeholder-gray-600 text-gray-200 font-light leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-500 ${isEnhancing ? 'opacity-40 filter blur-[1px]' : ''}`}
                                                 placeholder={isEnhancing ? "Refining your requirements into professional language..." : "e.g., I need a highly scalable e-commerce backend with microservices, handling 50k concurrent users, and strict PCI compliance..."}
                                                 value={description}
-                                                onChange={(e) => setDescription(e.target.value)}
+                                                onChange={(e) => {
+                                                    setDescription(e.target.value);
+                                                    if (isEnhanced) {
+                                                        setIsEnhanced(false);
+                                                        setLastDescription('');
+                                                    }
+                                                }}
                                                 disabled={isDeployed || isEnhancing}
                                                 readOnly={isDeployed || isEnhancing}
                                             />
@@ -1436,7 +1554,117 @@ const WorkspaceCanvas = () => {
                                                     </div>
                                                 </div>
                                             )}
+                                            {/* Available Services Dropdown & Popup */}
+                                            {architectureData?.remaining_services?.length > 0 && (
+                                                <div className="bg-surface border border-border rounded-2xl p-6">
+                                                    <h3 className="text-lg font-bold text-white mb-6 flex items-center">
+                                                        <span className="material-icons mr-2">lightbulb</span>
+                                                        Suggested Services
+                                                    </h3>
 
+                                                    <div className="flex flex-col space-y-4 max-w-xl">
+                                                        <p className="text-sm text-yellow-500/80 mb-2">
+                                                            Based on your description, Cloudiverse suggests the following services might be missing:
+                                                        </p>
+
+                                                        <div className="relative">
+                                                            <select
+                                                                onChange={(e) => {
+                                                                    if (e.target.value) {
+                                                                        const svc = architectureData.remaining_services.find(s => (s.service_id || s.id) === e.target.value);
+                                                                        setSelectedAvailableService(svc);
+                                                                        setIsPopupOpen(true);
+                                                                        e.target.value = ""; // Reset dropdown
+                                                                    }
+                                                                }}
+                                                                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white appearance-none cursor-pointer hover:border-primary/50 transition-colors focus:ring-2 focus:ring-primary/50 outline-none"
+                                                            >
+                                                                <option value="" disabled selected>Select a recommended service...</option>
+                                                                {architectureData.remaining_services
+                                                                    .filter(service => suggestedServices.some(s => s.service_id === (service.service_id || service.id)))
+                                                                    .map((service, index) => (
+                                                                        <option key={index} value={service.service_id || service.id} className="bg-gray-900 text-white">
+                                                                            ✨ {service.name || service.service_id} ({service.category})
+                                                                        </option>
+                                                                    ))}
+                                                            </select>
+                                                            <div className="absolute right-4 top-3.5 pointer-events-none text-gray-400">
+                                                                <span className="material-icons">expand_more</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Service Details Popup */}
+                                            <AnimatePresence>
+                                                {isPopupOpen && selectedAvailableService && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0 }}
+                                                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                                                        onClick={() => setIsPopupOpen(false)}
+                                                    >
+                                                        <motion.div
+                                                            initial={{ scale: 0.95, opacity: 0 }}
+                                                            animate={{ scale: 1, opacity: 1 }}
+                                                            exit={{ scale: 0.95, opacity: 0 }}
+                                                            className="bg-[#1A1D24] border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+                                                            onClick={e => e.stopPropagation()}
+                                                        >
+                                                            <div className="p-6 border-b border-white/10 flex justify-between items-start bg-gradient-to-r from-white/5 to-transparent">
+                                                                <div>
+                                                                    <h3 className="text-xl font-bold text-white">
+                                                                        {selectedAvailableService.name || selectedAvailableService.service_id}
+                                                                    </h3>
+                                                                    <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded mt-2 inline-block capitalize">
+                                                                        {selectedAvailableService.category}
+                                                                    </span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => setIsPopupOpen(false)}
+                                                                    className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
+                                                                >
+                                                                    <span className="material-icons">close</span>
+                                                                </button>
+                                                            </div>
+                                                            <div className="p-6 space-y-6">
+                                                                <div>
+                                                                    <h4 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-2">Description</h4>
+                                                                    <p className="text-gray-400 leading-relaxed">
+                                                                        {getServiceMetadata(selectedAvailableService.service_id || selectedAvailableService.id, selectedAvailableService.provider || selectedProvider || 'AWS').desc || selectedAvailableService.description || "No description available for this service."}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                                                                    <div className="flex items-start space-x-3">
+                                                                        <span className="material-icons text-blue-400 text-sm mt-0.5">info</span>
+                                                                        <div className="text-sm text-blue-200/80">
+                                                                            Adding this service will update your <strong>Terraform Configuration</strong> and include it in your <strong>Cost Estimation</strong>.
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-6 border-t border-white/10 bg-black/20 flex space-x-3">
+                                                                <button
+                                                                    onClick={() => setIsPopupOpen(false)}
+                                                                    className="flex-1 py-3 px-4 bg-white/5 hover:bg-white/10 text-gray-300 font-medium rounded-xl transition-colors"
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                                <button
+                                                                    onClick={handleAddService}
+                                                                    className="flex-1 py-3 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all transform hover:scale-[1.02]"
+                                                                >
+                                                                    Add Service
+                                                                </button>
+                                                            </div>
+                                                        </motion.div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+
+                                            <br></br>
                                             <div className="flex items-start space-x-2 bg-blue-500/5 p-4 rounded-xl border border-blue-500/10">
                                                 <span className="material-icons text-blue-400 text-sm mt-0.5">info</span>
                                                 <p className="text-xs text-gray-400">
@@ -2310,7 +2538,7 @@ const WorkspaceCanvas = () => {
                                         if (method === 'self') {
                                             transitionToStep('feedback');
                                         } else if (method === 'oneclick') {
-                                            transitionToStep('deploy');
+                                            transitionToStep('terraform_view');
                                         }
                                     }}
                                     onBack={() => transitionToStep('cost_estimation')}
@@ -2318,11 +2546,11 @@ const WorkspaceCanvas = () => {
                                 />
                             )}
 
-                            {/* STEP: DEPLOY */}
-                            {step === 'deploy' && (
-                                <DeployStep
+                            {/* STEP: DEPLOY RESOURCES (Application) */}
+                            {step === 'deploy_resources' && (
+                                <DeployResourcesStep
                                     workspace={{
-                                        id,
+                                        id: workspaceId,
                                         project_name: projectData?.name || infraSpec?.project_name,
                                         state_json: {
                                             infraSpec,
@@ -2331,9 +2559,14 @@ const WorkspaceCanvas = () => {
                                         }
                                     }}
                                     selectedProvider={selectedProvider}
-                                    onBack={() => transitionToStep('architecture')}
+                                    onBack={() => transitionToStep('terraform_provision')}
                                     onUpdateWorkspace={() => handleSaveDraft(true)}
-                                    onDeploySuccess={() => transitionToStep('deployment_processing')}
+                                    onDeploySuccess={() => {
+                                        setIsDeployed(true);
+                                        setIsProjectLive(true);
+                                        transitionToStep('deployment_ready');
+                                        handleSaveDraft(true);
+                                    }}
                                 />
                             )}
 
@@ -2351,17 +2584,40 @@ const WorkspaceCanvas = () => {
                                 />
                             )}
 
-                            {/* STEP 5: TERRAFORM VIEW */}
+                            {/* STEP 5: DEPLOY TERRAFORM (Infrastructure) */}
                             {step === 'terraform_view' && (
-                                <TerraformStep
-                                    workspaceId={id}
+                                <DeployTerraformStep
+                                    workspaceId={workspaceId}
                                     infraSpec={infraSpec}
                                     selectedProvider={selectedProvider}
                                     costEstimation={costEstimation}
-                                    onComplete={() => transitionToStep('deployment_summary')}
+                                    setConnection={setConnection}
+                                    onComplete={() => transitionToStep('terraform_provision')}
                                     onBack={() => transitionToStep('feedback')}
                                     isDeployed={isDeployed}
-                                    onDeploy={() => setIsDeployed(true)}
+                                />
+                            )}
+
+                            {/* STEP: PROVISION INFRASTRUCTURE (Terraform Apply) */}
+                            {step === 'terraform_provision' && (
+                                <DeployInfrastructureStep
+                                    workspaceId={workspaceId}
+                                    selectedProvider={selectedProvider}
+                                    onComplete={() => transitionToStep('deploy_resources')}
+                                    onBack={() => transitionToStep('terraform_view')}
+                                    userPlan={userPlan}
+                                    savedState={provisioningState}
+                                    onUpdateWorkspace={(newState) => {
+                                        setProvisioningState(prev => {
+                                            const updated = { ...prev, ...newState };
+                                            // Trigger save in next tick to avoid reducer side-effect issues
+                                            setTimeout(() => {
+                                                console.log("[WORKSPACE] Persisting provisioning state:", updated);
+                                                handleSaveDraft(true, { provisioning: updated });
+                                            }, 0);
+                                            return updated;
+                                        });
+                                    }}
                                 />
                             )}
 

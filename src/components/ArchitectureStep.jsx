@@ -28,6 +28,14 @@ const ArchitectureStep = ({
     const [error, setError] = useState(null);
     const diagramRef = useRef(null);
 
+    // New State for Service Addition Flow
+    const [selectedAvailableService, setSelectedAvailableService] = useState(null);
+    const [isPopupOpen, setIsPopupOpen] = useState(false);
+
+    // AI Suggestions State
+    const [suggestedServices, setSuggestedServices] = useState([]);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
     useEffect(() => {
         const loadArchitecture = async () => {
             if (!infraSpec || !selectedProvider || !selectedProfile) return;
@@ -67,6 +75,40 @@ const ArchitectureStep = ({
 
         loadArchitecture();
     }, [workspaceId, infraSpec, selectedProvider, selectedProfile, usageProfile, requirementsData, onArchitectureDataLoaded]);
+
+    // New: Fetch AI Suggestions Effect
+    useEffect(() => {
+        const fetchSuggestions = async () => {
+            // Only fetch if we have the architecture data loaded and base inputs
+            if (!infraSpec?.original_input || !architectureData?.services) return;
+            if (suggestedServices.length > 0) return; // Don't refetch if already present (memoize roughly)
+
+            setLoadingSuggestions(true);
+            try {
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+                const res = await axios.post(`${API_BASE}/architecture/validate-completeness`, {
+                    description: infraSpec.original_input,
+                    current_services: architectureData.services,
+                    catalog: {} // Backend has access/can treat empty as "use internal"
+                }, { headers });
+
+                if (res.data.suggestions) {
+                    setSuggestedServices(res.data.suggestions);
+                }
+            } catch (e) {
+                console.error("Failed to fetch suggestions:", e);
+            } finally {
+                setLoadingSuggestions(false);
+            }
+        };
+
+        // Small delay to ensure main data is settled? Or just run it.
+        if (!loading) {
+            fetchSuggestions();
+        }
+    }, [loading, infraSpec, architectureData]);
 
     if (error) {
         return (
@@ -201,6 +243,76 @@ const ArchitectureStep = ({
         }
     };
 
+    // IMPLEMENTATION: Service Addition Handler
+    const handleAddService = async () => {
+        if (!selectedAvailableService || isDeployed) return;
+
+        const serviceId = selectedAvailableService.service_id || selectedAvailableService.id;
+        const serviceName = selectedAvailableService.name || serviceId;
+
+        setIsPopupOpen(false); // Close popup immediately
+        const toastId = toast.loading(`Adding ${serviceName}...`);
+
+        try {
+            // Mockup current infra as before
+            const currentInfra = {
+                services: architectureData.services || [],
+                services_contract: architectureData.services_contract
+            };
+
+            const action = { type: 'ADD_SERVICE', serviceId: serviceId };
+
+            // Reconcile
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            const res = await axios.post(`${API_BASE}/architecture/reconcile`, {
+                action,
+                current_infra: currentInfra
+            }, { headers });
+
+            const { services_contract, deployable_services } = res.data;
+
+            // Success
+            toast.success(`${serviceName} added successfully!`, { id: toastId });
+
+            // Update Local Data (Optimistic or based on result)
+            // We need to move it from remaining to services
+            // But simpler is to allow Architecture reloading OR manually patch it.
+            // Let's manually patch to avoid full reload flicker, but reloading is safer for diagram.
+            // Actually, Reconcile returns the new services list.
+
+            // Update Architecture Data
+            const newArchData = {
+                ...architectureData,
+                services: services_contract.services,
+                // Remove from remaining?
+                remaining_services: architectureData.remaining_services.filter(s => s.service_id !== serviceId && s.id !== serviceId)
+            };
+
+            onArchitectureDataLoaded(newArchData);
+
+            // Update Global InfraSpec
+            if (onInfraSpecUpdate && infraSpec) {
+                onInfraSpecUpdate({
+                    ...infraSpec,
+                    canonical_architecture: {
+                        ...infraSpec.canonical_architecture,
+                        deployable_services: deployable_services,
+                    },
+                    services_contract: services_contract
+                });
+            }
+
+            setSelectedAvailableService(null);
+
+        } catch (err) {
+            console.error("Add Service Error:", err);
+            const msg = err.response?.data?.error || err.message;
+            toast.error(msg, { id: toastId });
+        }
+    };
+
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
             {/* Header */}
@@ -273,14 +385,6 @@ const ArchitectureStep = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {architectureData?.services?.map((service, index) => {
                         const isDisabled = service.state === 'USER_DISABLED';
-                        if (isDisabled && !isDeployed) return null; // Hide disabled services? OR show them as disabled. 
-                        // Let's hide them for cleaner UI, or show them grayed out.
-                        // User requested "Removal", implying they disappear. 
-                        // But if we hide them, how do they bring them back? 
-                        // For now, let's show them with transparency if we want "undo" later, 
-                        // but standard "Remove" usually implies gone.
-                        // Backend sets state: USER_DISABLED.
-                        // Let's filter them out visually if they are disabled.
                         if (isDisabled) return null;
 
                         return (
@@ -307,7 +411,141 @@ const ArchitectureStep = ({
                         )
                     })}
                 </div>
+
+                {/* AI Suggested Services Section */}
+                {suggestedServices.length > 0 && (
+                    <div className="mt-8 pt-8 border-t border-white/10 animate-fade-in">
+                        <h4 className="text-md font-bold text-yellow-500 mb-4 flex items-center">
+                            <span className="material-icons mr-2 text-sm">lightbulb</span>
+                            AI Suggestions (Correctness Check)
+                        </h4>
+                        <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 mb-4">
+                            <p className="text-sm text-yellow-200/80">
+                                The AI analyzed your project description and suggests these services might be missing.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {suggestedServices.map((suggestion, index) => {
+                                // Find full service details from remaining services if possible
+                                const fullService = architectureData.remaining_services?.find(s => s.service_id === suggestion.service_id || s.id === suggestion.service_id);
+                                const serviceName = fullService?.name || suggestion.service_id;
+                                const serviceCategory = fullService?.category || 'Suggested';
+
+                                return (
+                                    <div key={index} className="bg-yellow-500/5 rounded-xl p-4 border border-yellow-500/20 hover:bg-yellow-500/10 transition-colors group relative border-dashed">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center space-x-2">
+                                                    <h4 className="font-bold text-gray-200 text-lg">
+                                                        {serviceName}
+                                                    </h4>
+                                                </div>
+                                                <p className="text-sm text-gray-400 mt-1">{suggestion.reason}</p>
+                                                <div className="text-xs text-yellow-600 mt-2 capitalize font-mono flex items-center">
+                                                    {serviceCategory}
+                                                    <button
+                                                        onClick={() => {
+                                                            if (fullService) {
+                                                                setSelectedAvailableService(fullService);
+                                                                handleAddService(); // Auto add logic or open popup? Let's just add it.
+                                                                // Actually reusing handleAddService requires state set.
+                                                                // Better: Open popup for them to verify.
+                                                                setIsPopupOpen(true);
+                                                            } else {
+                                                                toast.error("Service details not found in catalog.");
+                                                            }
+                                                        }}
+                                                        className="ml-auto bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-500 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                                                    >
+                                                        Add Service
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {/* Available Services Dropdown Removed per user request - only show AI suggestions */}
+            {/* {architectureData?.remaining_services?.length > 0 && ( ... )} */}
+
+            {/* Service Details Popup */}
+            <AnimatePresence>
+                {isPopupOpen && selectedAvailableService && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setIsPopupOpen(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-[#1A1D24] border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* Popup Header */}
+                            <div className="p-6 border-b border-white/10 flex justify-between items-start bg-gradient-to-r from-white/5 to-transparent">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">
+                                        {selectedAvailableService.name || selectedAvailableService.service_id}
+                                    </h3>
+                                    <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded mt-2 inline-block capitalize">
+                                        {selectedAvailableService.category}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setIsPopupOpen(false)}
+                                    className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
+                                >
+                                    <span className="material-icons">close</span>
+                                </button>
+                            </div>
+
+                            {/* Popup Content */}
+                            <div className="p-6 space-y-6">
+                                <div>
+                                    <h4 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-2">Description</h4>
+                                    <p className="text-gray-400 leading-relaxed">
+                                        {selectedAvailableService.description || "No description available for this service."}
+                                    </p>
+                                </div>
+
+                                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                                    <div className="flex items-start space-x-3">
+                                        <span className="material-icons text-blue-400 text-sm mt-0.5">info</span>
+                                        <div className="text-sm text-blue-200/80">
+                                            Adding this service will update your <strong>Terraform Configuration</strong> and include it in your <strong>Cost Estimation</strong>.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Popup Footer */}
+                            <div className="p-6 border-t border-white/10 bg-black/20 flex space-x-3">
+                                <button
+                                    onClick={() => setIsPopupOpen(false)}
+                                    className="flex-1 py-3 px-4 bg-white/5 hover:bg-white/10 text-gray-300 font-medium rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleAddService}
+                                    className="flex-1 py-3 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all transform hover:scale-[1.02]"
+                                >
+                                    Add Service
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Deployment Choice Buttons */}
             <div className="flex flex-col space-y-6 pt-8 border-t border-white/5">

@@ -133,6 +133,7 @@ const LandingPage = () => {
                 <a href="#pricing" className="text-text-secondary hover:text-text-primary transition-colors">Pricing</a>
                 <a href="/docs" className="text-text-secondary hover:text-text-primary transition-colors">Docs</a>
                 <a href="/about" className="text-text-secondary hover:text-text-primary transition-colors">About</a>
+                <a href="/privacy" className="text-text-secondary hover:text-text-primary transition-colors">Privacy</a>
               </div>
             </nav>
             <div className="flex items-center space-x-4">
@@ -178,6 +179,7 @@ const LandingPage = () => {
               <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">Pricing</a>
               <a href="/docs" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">Docs</a>
               <a href="/about" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">About</a>
+              <a href="/privacy" onClick={() => setMobileMenuOpen(false)} className="text-text-secondary hover:text-text-primary py-2">Privacy</a>
               <hr className="border-border my-2" />
               {localStorage.getItem('token') ? (
                 <button
