@@ -234,7 +234,7 @@ const WorkspaceSelector = () => {
             </h1>
             <p className="text-text-secondary mt-2 text-lg">Manage and organize your cloud infrastructure projects</p>
           </div>
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 hidden md:flex">
             <button onClick={() => navigate('/')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors">
               <Home className="w-4 h-4" /> <span>Home</span>
             </button>
@@ -250,14 +250,14 @@ const WorkspaceSelector = () => {
           </div>
         </div>
 
-        {/* Stats Grid - Same as before */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
+        {/* Stats Grid - Mobile Horizontal Scroll */}
+        <div className="flex overflow-x-auto pb-4 gap-4 md:grid md:grid-cols-3 md:gap-6 md:pb-0 scrollbar-hide snap-x">
           {[
             { label: 'Total Projects', value: workspaces.length, icon: LayoutGrid, color: 'text-blue-400', bg: 'bg-blue-400/10' },
             { label: 'Active Deployments', value: workspaces.filter(w => w.state_json?.is_deployed === true && w.state_json?.is_live === true).length, icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' },
             { label: 'Draft Designs', value: workspaces.filter(w => !w.state_json?.is_deployed).length, icon: FileCode2, color: 'text-purple-400', bg: 'bg-purple-400/10' }
           ].map((stat, idx) => (
-            <div key={idx} className="bg-surface border border-border p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+            <div key={idx} className="min-w-[280px] md:min-w-0 bg-surface border border-border p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow snap-center">
               <div className="flex justify-between">
                 <div>
                   <p className="text-text-secondary font-medium mb-1">{stat.label}</p>

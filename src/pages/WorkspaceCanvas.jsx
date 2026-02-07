@@ -1007,12 +1007,39 @@ const WorkspaceCanvas = () => {
                     </div>
                     <button
                         onClick={() => navigate('/workspaces')}
-                        className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-gray-400 hover:bg-white/10 hover:text-white transition-colors flex items-center space-x-2"
+                        className="hidden md:flex px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-gray-400 hover:bg-white/10 hover:text-white transition-colors items-center space-x-2"
                     >
                         <span className="material-icons text-sm">dashboard</span>
                         <span>Workspace Dashboard</span>
                     </button>
                 </header>
+
+                {/* Mobile Step Tabs - Visible only on Mobile */}
+                <div className="md:hidden px-4 py-2 bg-surface/50 border-b border-white/5 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-2">
+                    {[
+                        { id: 'input', label: 'Reqs', icon: 'edit_note' },
+                        { id: 'review_spec', label: 'Spec', icon: 'schema', disabled: !infraSpec },
+                        { id: 'cost_estimation', label: 'Cost', icon: 'savings', disabled: !costEstimation },
+                        { id: 'architecture', label: 'Diagram', icon: 'account_tree', disabled: !architectureData },
+                        ...(deploymentMethod === 'self' ? [{ id: 'terraform_view', label: 'Code', icon: 'code', disabled: !feedbackSubmitted }] : []),
+                        ...(deploymentMethod === 'oneclick' || step === 'deploy_resources' ? [{ id: 'deploy_resources', label: 'Deploy', icon: 'rocket_launch', disabled: !feedbackSubmitted }] : [])
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => !tab.disabled && transitionToStep(tab.id)}
+                            disabled={tab.disabled}
+                            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${step === tab.id || (tab.id === 'input' && step === 'question')
+                                ? 'bg-primary/20 text-primary border border-primary/20'
+                                : tab.disabled
+                                    ? 'text-gray-600 cursor-not-allowed'
+                                    : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                                }`}
+                        >
+                            <span className="material-icons text-[14px]">{tab.icon}</span>
+                            <span>{tab.label}</span>
+                        </button>
+                    ))}
+                </div>
 
                 {/* Content Area - Siri Border Root */}
                 <div className="flex-1 flex siri-border-active overflow-hidden relative">
@@ -1555,7 +1582,7 @@ const WorkspaceCanvas = () => {
                                                 </div>
                                             )}
                                             {/* Available Services Dropdown & Popup */}
-                                            {architectureData?.remaining_services?.length > 0 && (
+                                            {architectureData?.remaining_services?.filter(service => suggestedServices.some(s => s.service_id === (service.service_id || service.id))).length > 0 && (
                                                 <div className="bg-surface border border-border rounded-2xl p-6">
                                                     <h3 className="text-lg font-bold text-white mb-6 flex items-center">
                                                         <span className="material-icons mr-2">lightbulb</span>

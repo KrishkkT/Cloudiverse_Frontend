@@ -197,9 +197,10 @@ const DeployInfrastructureStep = ({
                 if (job.status === 'completed') {
                     setDestroyStatus('success');
                     setDeployStatus('idle'); // Reset deploy status
+                    setLogs([]); // 🔥 Clear logs to show clean state for new provisioning
                     clearInterval(pollingRef.current);
                     pollingRef.current = null;
-                    persistState({ destroyStatus: 'success', deployStatus: 'idle', logs: job.logs });
+                    persistState({ destroyStatus: 'success', deployStatus: 'idle', logs: [] });
                     toast.success("Infrastructure Destroyed");
                 } else if (job.status === 'failed') {
                     setDestroyStatus('failed');
@@ -216,12 +217,12 @@ const DeployInfrastructureStep = ({
         }, 2000);
     };
 
-    // Auto-scroll logs
-    useEffect(() => {
-        if (logEndRef.current) {
-            logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [logs]);
+    // Auto-scroll logs extracted to a separate component or disabled to allow manual scrolling
+    // useEffect(() => {
+    //     if (logEndRef.current) {
+    //         logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    //     }
+    // }, [logs]);
 
     // ─── RENDER ──────────────────────────────────────────────────────────────────
 
@@ -399,9 +400,20 @@ const DeployInfrastructureStep = ({
                                             <span className="material-icons text-3xl text-red-500">warning</span>
                                             <h3 className="text-lg font-semibold text-text-primary">Confirm Destroy</h3>
                                         </div>
-                                        <p className="text-text-secondary mb-6">
-                                            This will <strong>permanently delete</strong> all infrastructure resources including databases, storage, and services. This action cannot be undone.
-                                        </p>
+                                        <div className="mb-4">
+                                            <label className="block text-sm text-text-secondary mb-2">
+                                                To confirm, type <strong>DELETE</strong> below:
+                                            </label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-background border border-border rounded p-2 text-text-primary focus:border-red-500 focus:outline-none"
+                                                placeholder="DELETE"
+                                                onChange={(e) => {
+                                                    const btn = document.getElementById('confirm-destroy-btn');
+                                                    if (btn) btn.disabled = e.target.value !== 'DELETE';
+                                                }}
+                                            />
+                                        </div>
                                         <div className="flex gap-3 justify-end">
                                             <button
                                                 onClick={() => setShowDestroyConfirm(false)}
@@ -410,8 +422,10 @@ const DeployInfrastructureStep = ({
                                                 Cancel
                                             </button>
                                             <button
+                                                id="confirm-destroy-btn"
                                                 onClick={handleDestroy}
-                                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                                                disabled={true}
+                                                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
                                             >
                                                 Yes, Destroy Everything
                                             </button>
