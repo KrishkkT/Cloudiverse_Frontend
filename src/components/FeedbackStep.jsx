@@ -12,7 +12,8 @@ const FeedbackStep = ({
     onBack,
     costIntent,
     onFeedbackSubmitted,
-    isDeployed
+    isDeployed,
+    deploymentMethod
 }) => {
     const [feedback, setFeedback] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -117,7 +118,7 @@ const FeedbackStep = ({
                 </p>
             </div>
 
-            <div className="bg-surface border border-border rounded-2xl p-8">
+            <div className="glass-panel rounded-2xl p-8">
                 <h3 className="text-lg font-medium text-white mb-6 text-center">
                     {isDeployed ? 'Cost estimate feedback provided.' : 'Is this cost estimate within your expected budget?'}
                 </h3>
@@ -173,25 +174,25 @@ const FeedbackStep = ({
                 <div className="flex justify-between items-center pt-8 border-t border-white/5">
                     <button
                         onClick={onBack}
-                        className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                        className="px-4 py-3 md:px-6 md:py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2 text-sm md:text-base"
                     >
-                        <span className="material-icons">arrow_back</span>
-                        <span>Back to Estimate</span>
+                        <span className="material-icons text-sm md:text-base">arrow_back</span>
+                        <span>Back</span>
                     </button>
                     <button
                         onClick={handleSubmit}
                         disabled={(!feedback && !isDeployed) || isSubmitting}
-                        className="px-8 py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-6 py-3 md:px-8 md:py-4 bg-gradient-to-r from-primary to-purple-500 rounded-xl text-white font-bold uppercase tracking-wider flex items-center space-x-2 md:space-x-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-sm"
                     >
                         {isSubmitting ? (
                             <>
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                 <span>Processing...</span>
                             </>
                         ) : (
                             <>
-                                <span>{isDeployed ? 'View Terraform' : 'Generate Terraform'}</span>
-                                <span className="material-icons">code</span>
+                                <span className="whitespace-nowrap">{isDeployed ? 'View Terraform' : (deploymentMethod === 'oneclick' ? 'Connect Cloud' : 'Generate Terraform')}</span>
+                                <span className="material-icons text-sm md:text-base">{deploymentMethod === 'oneclick' ? 'link' : 'code'}</span>
                             </>
                         )}
                     </button>

@@ -12,7 +12,8 @@ const DeployResourcesStep = ({
     workspace,
     selectedProvider,
     onBack,
-    onUpdateWorkspace
+    onUpdateWorkspace,
+    onDeploySuccess  // 🔥 NEW: Callback to mark project as deployed
 }) => {
     const provider = selectedProvider || 'aws';
     const { costEstimation, infraSpec, infra_outputs } = workspace?.state_json || {};
@@ -226,6 +227,10 @@ const DeployResourcesStep = ({
                         if (wsRes.data && onUpdateWorkspace) {
                             onUpdateWorkspace(wsRes.data);
                         }
+                        // 🔥 NEW: Mark project as deployed
+                        if (onDeploySuccess) {
+                            onDeploySuccess();
+                        }
                     } catch (refreshErr) {
                         console.error("Failed to refresh workspace after deploy:", refreshErr);
                     }
@@ -339,16 +344,16 @@ const DeployResourcesStep = ({
                         {deployStatus === 'idle' && (
                             <div className="bg-[#1e212b] border border-white/10 rounded-2xl p-8 shadow-xl">
                                 {/* Source Tabs */}
-                                <div className="flex gap-4 mb-8">
+                                <div className="flex flex-col md:flex-row gap-4 mb-8">
                                     <button
                                         onClick={() => setSourceType('github')}
-                                        className={`flex-1 py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-lg font-bold ${sourceType === 'github' ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
+                                        className={`flex-1 py-3 md:py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-base md:text-lg font-bold ${sourceType === 'github' ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
                                     >
                                         <span className="material-icons">code</span> GitHub Repository
                                     </button>
                                     <button
                                         onClick={() => setSourceType('docker')}
-                                        className={`flex-1 py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-lg font-bold ${sourceType === 'docker' ? 'bg-purple-500/10 border-purple-500 text-purple-400 shadow-lg shadow-purple-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
+                                        className={`flex-1 py-3 md:py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-base md:text-lg font-bold ${sourceType === 'docker' ? 'bg-purple-500/10 border-purple-500 text-purple-400 shadow-lg shadow-purple-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
                                     >
                                         <span className="material-icons">layers</span> Docker Image
                                     </button>
@@ -441,7 +446,7 @@ const DeployResourcesStep = ({
                                     <button
                                         onClick={handleDeploySubmit}
                                         disabled={!isFormValid()}
-                                        className={`px-8 py-4 rounded-xl font-bold text-lg flex items-center gap-3 transition-all ${isFormValid()
+                                        className={`px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg flex items-center gap-3 transition-all ${isFormValid()
                                             ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20 hover:scale-[1.02]'
                                             : 'bg-white/5 text-gray-500 cursor-not-allowed'}`}
                                     >
@@ -547,7 +552,7 @@ const DeployResourcesStep = ({
                                             href={liveUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-green-500/20 hover:scale-105 transition-all text-lg"
+                                            className="inline-flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl shadow-lg shadow-green-500/20 hover:scale-105 transition-all text-base md:text-lg"
                                         >
                                             Visit Live Website <span className="material-icons">open_in_new</span>
                                         </a>

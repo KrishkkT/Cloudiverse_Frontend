@@ -11,6 +11,7 @@ import { getServiceMetadata } from '../data/serviceMetadata';
 import FeedbackStep from '../components/FeedbackStep';
 import TerraformStep from '../components/TerraformStep';
 import RequirementsStep from '../components/RequirementsStep';
+import CostBreakdown from '../components/CostBreakdown';
 import ArchitectureStep from '../components/ArchitectureStep';
 import DeploymentGuide from '../components/DeploymentGuide';
 import DeployTerraformStep from '../components/DeployTerraformStep';
@@ -88,7 +89,6 @@ const WorkspaceCanvas = () => {
         const fetchSuggestions = async () => {
             // Only fetch if we have the architecture data loaded and base inputs
             if (!infraSpec?.original_input || !architectureData?.services) return;
-            // if (suggestedServices.length > 0) return; // Allow refetch on spec change
 
             setLoadingSuggestions(true);
             try {
@@ -102,7 +102,18 @@ const WorkspaceCanvas = () => {
                 }, { headers });
 
                 if (res.data.suggestions) {
-                    setSuggestedServices(res.data.suggestions);
+                    setSuggestedServices(prev => {
+                        const existingIds = new Set(prev.map(s => s.service_id || s.id));
+                        // Filter out suggestions that are already in the project
+                        const currentModules = new Set((infraSpec.modules || []).map(m => m.type || m.service_name));
+
+                        const newSuggestions = res.data.suggestions.filter(s =>
+                            !existingIds.has(s.service_id) &&
+                            !currentModules.has(s.service_id)
+                        );
+
+                        return [...prev, ...newSuggestions];
+                    });
                 }
             } catch (e) {
                 console.error("Failed to fetch suggestions:", e);
@@ -112,6 +123,28 @@ const WorkspaceCanvas = () => {
         };
 
         if (step === 'review_spec' && !isProcessing) {
+            // 1. Load Pattern Suggestions (Deterministic)
+            if (infraSpec?.optional_services?.length > 0) {
+                const patternSuggestions = infraSpec.optional_services.map(s => ({
+                    service_id: s.service_class, // Normalize to service_id
+                    ...s
+                }));
+
+                setSuggestedServices(prev => {
+                    const existingIds = new Set(prev.map(s => s.service_id || s.id));
+                    const currentModules = new Set((infraSpec.modules || []).map(m => m.type || m.service_name));
+
+                    const newItems = patternSuggestions.filter(s =>
+                        !existingIds.has(s.service_id) &&
+                        !currentModules.has(s.service_id)
+                    );
+
+                    if (newItems.length === 0) return prev;
+                    return [...prev, ...newItems];
+                });
+            }
+
+            // 2. Fetch AI Suggestions (Creative)
             fetchSuggestions();
         }
     }, [step, isProcessing, infraSpec, architectureData]);
@@ -229,7 +262,8 @@ const WorkspaceCanvas = () => {
             const payload = {
                 infraSpec,
                 intent: aiSnapshot,
-                cost_profile: costProfile, // Pass the selected cost profile to backend
+                cost_profile: costProfile,
+                removedServices, // 🔥 Pass the list of services user explicitly removed
                 usage_profile: {
                     ...usageProfile?.usage_profile,
                     source: isUsageUserModified ? 'user_provided' : 'ai_inferred'
@@ -394,6 +428,18 @@ const WorkspaceCanvas = () => {
                     // Restore Removed Services (Recycle Bin)
                     if (savedState.removedServices) {
                         setRemovedServices(savedState.removedServices);
+
+                        // 🔥 FIX: Reconcile infraSpec.modules with removedServices
+                        // Filter out any services that are in the removed list to prevent duplicates
+                        if (savedState.infraSpec?.modules?.length && savedState.removedServices.length) {
+                            const removedIds = new Set(savedState.removedServices.map(r => r.service_name || r.type));
+                            setInfraSpec(prev => {
+                                if (!prev?.modules) return prev;
+                                const filteredModules = prev.modules.filter(m => !removedIds.has(m.service_name || m.type));
+                                console.log(`[WORKSPACE] Reconciled modules: ${prev.modules.length} → ${filteredModules.length} (removed ${removedIds.size} services)`);
+                                return { ...prev, modules: filteredModules };
+                            });
+                        }
                     }
 
                     // Restore Architecture Snapshot
@@ -665,13 +711,13 @@ const WorkspaceCanvas = () => {
                     history,
                     description,
                     currentQuestion,
-                    infraSpec,
+                    infraSpec: overrides.infraSpec || infraSpec,
                     projectData,
                     aiSnapshot,
                     costEstimation,
                     costProfile,
                     usageProfile, // 🔥 Persist Usage Profile
-                    removedServices, // 🔥 Persist Removed Services
+                    removedServices: overrides.removedServices || removedServices, // 🔥 Persist Removed Services (with override support)
                     diagramImage, // 🔥 Persist high-res snapshot for report
 
                     selectedProvider, // 🔥 Persist the user's choice (Standardized)
@@ -747,6 +793,38 @@ const WorkspaceCanvas = () => {
         }
     };
 
+    // 🔥 NEW: Add Suggested Service
+    const handleAddService = () => {
+        if (isDeployed || !selectedAvailableService) return;
+
+        const service = selectedAvailableService;
+
+        // Construct module object
+        const moduleToAdd = {
+            service_name: service.name || service.service_id || service.id,
+            type: service.service_class || service.service_id || service.id,
+            category: service.category || 'other',
+            provider: selectedProvider || 'AZURE', // Default to current provider
+            description: service.description,
+            is_suggestion_added: true
+        };
+
+        setInfraSpec(prev => ({
+            ...prev,
+            modules: [...(prev.modules || []), moduleToAdd]
+        }));
+
+        // Remove from suggestions to hide it
+        setSuggestedServices(prev => prev.filter(s =>
+            (s.service_id || s.id || s.service_class) !== (service.service_id || service.id)
+        ));
+
+        setIsPopupOpen(false);
+        setSelectedAvailableService(null);
+        toast.success(`Added ${moduleToAdd.service_name} to architecture.`);
+        setTimeout(() => handleSaveDraft(true), 100);
+    };
+
     // 🔥 NEW: Handle Module Removal from Specification Step
     const handleRemoveModule = async (moduleName) => {
         if (isDeployed) return;
@@ -768,18 +846,21 @@ const WorkspaceCanvas = () => {
         try {
             console.log(`[SPEC] Removing module: ${moduleName}`);
 
-            // 1. Optimistic Update
-            setInfraSpec(prev => {
-                const updatedModules = prev.modules.filter(m => (m.service_name || m.type) !== moduleName);
-                return { ...prev, modules: updatedModules };
-            });
+            // 1. Calculate new state synchronously
+            const updatedModules = infraSpec.modules.filter(m => (m.service_name || m.type) !== moduleName);
+            const updatedInfraSpec = { ...infraSpec, modules: updatedModules };
+            const updatedRemovedServices = [...removedServices, moduleToRemove];
 
-            // 2. Add to Removed Bin
-            setRemovedServices(prev => [...prev, moduleToRemove]);
+            // 2. Update React state
+            setInfraSpec(updatedInfraSpec);
+            setRemovedServices(updatedRemovedServices);
 
-            // 3. Trigger Save
+            // 3. Trigger Save with updated values (fixes stale closure bug)
             toast.success(`${moduleName} moved to Removed Services.`);
-            setTimeout(() => handleSaveDraft(true), 100);
+            setTimeout(() => handleSaveDraft(true, {
+                infraSpec: updatedInfraSpec,
+                removedServices: updatedRemovedServices
+            }), 100);
 
         } catch (err) {
             console.error('[REMOVE ERROR]', err);
@@ -793,14 +874,23 @@ const WorkspaceCanvas = () => {
         const moduleRestored = removedServices.find(m => (m.service_name || m.type) === moduleName);
         if (!moduleRestored) return;
 
-        setInfraSpec(prev => ({
-            ...prev,
-            modules: [...(prev.modules || []), moduleRestored]
-        }));
+        // 1. Calculate new state synchronously
+        const updatedInfraSpec = {
+            ...infraSpec,
+            modules: [...(infraSpec.modules || []), moduleRestored]
+        };
+        const updatedRemovedServices = removedServices.filter(m => (m.service_name || m.type) !== moduleName);
 
-        setRemovedServices(prev => prev.filter(m => (m.service_name || m.type) !== moduleName));
+        // 2. Update React state
+        setInfraSpec(updatedInfraSpec);
+        setRemovedServices(updatedRemovedServices);
+
+        // 3. Trigger Save with updated values (fixes stale closure bug)
         toast.success(`${moduleName} restored to architecture.`);
-        setTimeout(() => handleSaveDraft(true), 100);
+        setTimeout(() => handleSaveDraft(true, {
+            infraSpec: updatedInfraSpec,
+            removedServices: updatedRemovedServices
+        }), 100);
     };
 
 
@@ -993,24 +1083,17 @@ const WorkspaceCanvas = () => {
                                 </span>
                             ) : (
                                 <>
-                                    <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-gray-400 tracking-wider uppercase">Draft Mode</span>
-                                    <button
-                                        onClick={() => handleSaveDraft(false)}
-                                        className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary hover:bg-primary/20 transition-colors uppercase tracking-wider flex items-center space-x-1"
-                                    >
-                                        <span className="material-icons text-[10px]">save</span>
-                                        <span>{workspaceId ? 'Update Draft' : 'Save Draft'}</span>
-                                    </button>
+                                    {/* Update/Save Draft button removed as per user request (State is auto-saved) */}
                                 </>
                             )}
                         </div>
                     </div>
                     <button
                         onClick={() => navigate('/workspaces')}
-                        className="hidden md:flex px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-medium text-gray-400 hover:bg-white/10 hover:text-white transition-colors items-center space-x-2"
+                        className="flex px-3 py-2 md:px-4 md:py-2 rounded-xl bg-white/5 border border-white/10 text-xs md:text-sm font-medium text-gray-400 hover:bg-white/10 hover:text-white transition-colors items-center space-x-2"
                     >
-                        <span className="material-icons text-sm">dashboard</span>
-                        <span>Workspace Dashboard</span>
+                        <span className="material-icons text-sm md:hidden">dashboard</span>
+                        <span className="hidden md:inline">Workspace Dashboard</span>
                     </button>
                 </header>
 
@@ -1115,8 +1198,8 @@ const WorkspaceCanvas = () => {
                                     {/* V2 Intent Controls (New Location) */}
                                     <div className="mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
                                         {/* Domain Control - Full Width */}
-                                        <div className="bg-surface border border-border rounded-xl p-6 hover:border-blue-500/30 transition-colors group/card">
-                                            <div className="flex items-center justify-between mb-4">
+                                        <div className="glass-card rounded-xl p-6 hover:border-blue-500/30 transition-colors group/card">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                                                 <div className="flex items-center space-x-4">
                                                     <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 group-hover/card:bg-blue-500/20 transition-colors">
                                                         <span className="material-icons text-xl">category</span>
@@ -1124,11 +1207,13 @@ const WorkspaceCanvas = () => {
                                                     <div>
                                                         <div className="text-base font-bold text-white">Industry Domains</div>
                                                         <div className="text-xs text-gray-400 mt-1">
-                                                            Domains add contextual bias (compliance, data patterns).<br />
-                                                            They do not restrict architecture. You can select multiple.
+                                                            Domains add contextual bias (compliance, data patterns). They do not restrict architecture. You can select multiple.
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </div>
+
+                                            <div className="mb-4">
                                                 <select
                                                     onChange={(e) => {
                                                         const val = e.target.value;
@@ -1136,11 +1221,11 @@ const WorkspaceCanvas = () => {
                                                             setDomains([...domains, val]);
                                                         }
                                                     }}
-                                                    className="bg-black/40 text-gray-200 text-sm font-medium rounded-lg px-4 py-2 border border-white/10 focus:outline-none focus:border-blue-500/50 transition-colors cursor-pointer min-w-[160px]"
+                                                    className="w-full bg-black/40 text-gray-200 font-medium rounded-lg border border-white/10 focus:outline-none focus:border-blue-500/50 transition-colors cursor-pointer text-sm py-3 px-4 md:py-2 md:px-3 lg:py-1.5 lg:px-3"
                                                     disabled={isDeployed}
                                                     value=""
                                                 >
-                                                    <option value="" disabled className="bg-surface text-gray-500">+ Add Tag</option>
+                                                    <option value="" disabled className="bg-surface text-gray-500">+ Add Industry Tag</option>
                                                     <option value="commerce" className="bg-surface text-gray-200">E-Commerce</option>
                                                     <option value="saas" className="bg-surface text-gray-200">SaaS</option>
                                                     <option value="fintech" className="bg-surface text-gray-200">Fintech</option>
@@ -1154,13 +1239,13 @@ const WorkspaceCanvas = () => {
                                             </div>
 
                                             {/* Chips */}
-                                            <div className="flex flex-wrap gap-2 pl-[60px]">
+                                            <div className="flex flex-wrap gap-2">
                                                 {domains.map((tag, idx) => (
                                                     <span
                                                         key={idx}
                                                         className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-lg text-xs font-bold text-blue-400 flex items-center space-x-2 animate-fade-in transition-all hover:bg-blue-500/20"
                                                     >
-                                                        <span className="capitalize">{tag}</span>
+                                                        <span className="capitalize">{tag === 'commerce' ? 'E-Commerce' : tag}</span>
                                                         <button
                                                             onClick={() => setDomains(domains.filter(d => d !== tag))}
                                                             className="hover:text-white transition-colors flex items-center"
@@ -1175,8 +1260,8 @@ const WorkspaceCanvas = () => {
 
 
                                     <div className="relative group">
-                                        <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                                        <div className="relative bg-surface border border-border rounded-2xl p-2 shadow-2xl">
+
+                                        <div className="relative glass-panel rounded-2xl p-2 shadow-2xl">
                                             <textarea
                                                 className={`w-full h-48 bg-transparent text-xl p-8 focus:outline-none resize-none placeholder-gray-600 text-gray-200 font-light leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-500 ${isEnhancing ? 'opacity-40 filter blur-[1px]' : ''}`}
                                                 placeholder={isEnhancing ? "Refining your requirements into professional language..." : "e.g., I need a highly scalable e-commerce backend with microservices, handling 50k concurrent users, and strict PCI compliance..."}
@@ -1264,8 +1349,8 @@ const WorkspaceCanvas = () => {
                                             <button
                                                 key={idx}
                                                 onClick={() => handleAnswerQuestion(typeof opt === 'object' ? (opt.value || opt.label) : opt)}
-                                                className={`p-6 bg-surface border rounded-2xl text-left transition-all group relative overflow-hidden
-                                                ${selectedOption === (typeof opt === 'object' ? (opt.value || opt.label) : opt) ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-white/20'}`}
+                                                className={`p-6 glass-card rounded-2xl text-left transition-all group relative overflow-hidden
+                                                ${selectedOption === (typeof opt === 'object' ? (opt.value || opt.label) : opt) ? 'border-primary ring-1 ring-primary' : 'hover:border-white/20'}`}
                                             >
                                                 <div className="relative z-10 flex items-center justify-between">
                                                     <div>
@@ -1291,7 +1376,7 @@ const WorkspaceCanvas = () => {
                                         <p className="text-gray-400">We've analyzed your requirements. Please confirm this summary before we generate the infrastructure.</p>
                                     </div>
 
-                                    <div className="bg-surface border border-border rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+                                    <div className="glass-panel rounded-3xl p-8 shadow-2xl relative overflow-hidden">
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[100px] -mr-32 -mt-32"></div>
 
                                         {/* Summary Card */}
@@ -1404,14 +1489,8 @@ const WorkspaceCanvas = () => {
                                 <div className="space-y-8 animate-fade-in">
 
                                     {/* SECTION 1: PROJECT SNAPSHOT */}
-                                    <div className="bg-surface border border-border rounded-2xl p-6 shadow-lg relative overflow-hidden">
+                                    <div className="glass-panel rounded-2xl p-6 shadow-lg relative overflow-hidden">
                                         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[60px] -mr-10 -mt-10"></div>
-                                        <button
-                                            onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}
-                                            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors rounded-lg p-2 hover:bg-white/5"
-                                        >
-                                            <span className="material-icons text-sm">settings</span>
-                                        </button>
 
                                         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Project Snapshot</h3>
 
@@ -1477,7 +1556,7 @@ const WorkspaceCanvas = () => {
                                             <h3 className="text-lg font-bold text-white">How we understood your project</h3>
                                         </div>
 
-                                        <div className="bg-surface/50 border border-border rounded-2xl p-6">
+                                        <div className="glass-panel rounded-2xl p-6">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 {infraSpec.explanations?.slice(0, 4).map((exp, idx) => (
                                                     <div key={idx} className="flex items-start space-x-3">
@@ -1504,7 +1583,7 @@ const WorkspaceCanvas = () => {
                                             <h3 className="text-lg font-bold text-white">Architecture Overview</h3>
                                         </div>
 
-                                        <div className="bg-surface border border-border rounded-2xl p-6 relative overflow-hidden hover:border-primary/30 transition-all duration-500">
+                                        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden hover:border-primary/30 transition-all duration-500">
 
                                             {/* AI Project Summary (Concise) */}
                                             <p className="text-white font-medium text-lg leading-relaxed border-b border-white/5 pb-4 mb-6">
@@ -1583,7 +1662,7 @@ const WorkspaceCanvas = () => {
                                             )}
                                             {/* Available Services Dropdown & Popup */}
                                             {architectureData?.remaining_services?.filter(service => suggestedServices.some(s => s.service_id === (service.service_id || service.id))).length > 0 && (
-                                                <div className="bg-surface border border-border rounded-2xl p-6">
+                                                <div className="glass-inner-solid rounded-2xl p-6">
                                                     <h3 className="text-lg font-bold text-white mb-6 flex items-center">
                                                         <span className="material-icons mr-2">lightbulb</span>
                                                         Suggested Services
@@ -1637,7 +1716,7 @@ const WorkspaceCanvas = () => {
                                                             initial={{ scale: 0.95, opacity: 0 }}
                                                             animate={{ scale: 1, opacity: 1 }}
                                                             exit={{ scale: 0.95, opacity: 0 }}
-                                                            className="bg-[#1A1D24] border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+                                                            className="glass-modal rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
                                                             onClick={e => e.stopPropagation()}
                                                         >
                                                             <div className="p-6 border-b border-white/10 flex justify-between items-start bg-gradient-to-r from-white/5 to-transparent">
@@ -1755,7 +1834,7 @@ const WorkspaceCanvas = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {/* Monthly Users */}
-                                        <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col hover:border-primary/50 transition-all group relative overflow-hidden">
+                                        <div className="glass-card rounded-2xl p-6 flex flex-col hover:border-primary/50 transition-all group relative overflow-hidden">
                                             <div className="absolute top-0 right-0 p-3">
                                                 <span className="material-icons text-primary/20 group-hover:text-primary/40 transition-colors text-4xl">group</span>
                                             </div>
@@ -1821,7 +1900,7 @@ const WorkspaceCanvas = () => {
                                         </div>
 
                                         {/* Data Transfer */}
-                                        <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col hover:border-blue-500/50 transition-all group relative overflow-hidden">
+                                        <div className="glass-card rounded-2xl p-6 flex flex-col hover:border-blue-500/50 transition-all group relative overflow-hidden">
                                             <div className="absolute top-0 right-0 p-3">
                                                 <span className="material-icons text-blue-500/20 group-hover:text-blue-500/40 transition-colors text-4xl">swap_horiz</span>
                                             </div>
@@ -1887,7 +1966,7 @@ const WorkspaceCanvas = () => {
                                         </div>
 
                                         {/* Storage */}
-                                        <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col hover:border-purple-500/50 transition-all group relative overflow-hidden">
+                                        <div className="glass-card rounded-2xl p-6 flex flex-col hover:border-purple-500/50 transition-all group relative overflow-hidden">
                                             <div className="absolute top-0 right-0 p-3">
                                                 <span className="material-icons text-purple-500/20 group-hover:text-purple-500/40 transition-colors text-4xl">storage</span>
                                             </div>
@@ -2015,7 +2094,7 @@ const WorkspaceCanvas = () => {
                                                         className={`cursor-pointer rounded-2xl p-5 border transition-all relative overflow-hidden flex flex-col justify-between
                                                         ${isSelected
                                                                 ? 'bg-primary/10 border-primary shadow-lg shadow-primary/20 scale-[1.02]'
-                                                                : 'bg-surface border-border hover:border-white/20'}`}
+                                                                : 'glass-card hover:border-white/20'}`}
                                                     >
                                                         {rank.recommended && (
                                                             <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-r from-yellow-400 to-amber-500 text-[10px] font-bold text-black uppercase tracking-tighter rounded-bl-xl shadow-lg">
@@ -2079,6 +2158,47 @@ const WorkspaceCanvas = () => {
                                                                 <span className="material-icons text-[12px]">check_circle</span>
                                                             </div>
                                                         )}
+
+                                                        {/* 🆕 SERVICE BREAKDOWN DROPDOWN */}
+                                                        {(() => {
+                                                            // Get services for this provider from scenarios or breakdown
+                                                            const providerData = costEstimation.scenarios?.cost_effective?.[rank.provider] ||
+                                                                costEstimation.scenarios?.high_performance?.[rank.provider] ||
+                                                                costEstimation[rank.provider.toLowerCase()] || {};
+                                                            const services = providerData.services || providerData.breakdown || [];
+
+                                                            if (!services.length) return null;
+
+                                                            return (
+                                                                <details className="mt-3 group" onClick={(e) => e.stopPropagation()}>
+                                                                    <summary className="cursor-pointer text-[11px] text-gray-400 hover:text-primary transition-colors flex items-center gap-1">
+                                                                        <span className="material-icons text-[14px] group-open:rotate-90 transition-transform">chevron_right</span>
+                                                                        View {services.length} included services
+                                                                    </summary>
+                                                                    <div className="mt-2 space-y-1 max-h-48 overflow-y-auto pr-1 text-[10px]">
+                                                                        {services.map((svc, idx) => {
+                                                                            const serviceName = svc.name || svc.service || svc.service_id || 'Service';
+                                                                            const cost = svc.monthly_cost ?? svc.cost ?? 0;
+                                                                            const reason = svc.reasoning || svc.reason || svc.pricing_note || (cost === 0 ? 'Usage-based / Free tier' : 'Infrastructure cost');
+
+                                                                            return (
+                                                                                <details key={idx} className="bg-white/5 rounded-lg p-2 group/svc">
+                                                                                    <summary className="cursor-pointer flex justify-between items-center">
+                                                                                        <span className="text-gray-300 truncate flex-1">{serviceName}</span>
+                                                                                        <span className={`font-mono font-bold ml-2 ${cost > 0 ? 'text-primary' : 'text-gray-500'}`}>
+                                                                                            ${typeof cost === 'number' ? cost.toFixed(2) : cost}
+                                                                                        </span>
+                                                                                    </summary>
+                                                                                    <div className="mt-1 pt-1 border-t border-white/5 text-[9px] text-gray-500 italic">
+                                                                                        💡 {reason}
+                                                                                    </div>
+                                                                                </details>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </details>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 );
                                             })}
@@ -2119,7 +2239,7 @@ const WorkspaceCanvas = () => {
                                         };
 
                                         return (
-                                            <details className="group bg-gradient-to-br from-surface/80 to-surface/40 border border-border rounded-2xl transition-all hover:border-primary/30">
+                                            <details className="group glass-panel rounded-2xl transition-all hover:border-primary/30">
                                                 <summary className="px-6 py-4 cursor-pointer flex items-center justify-between">
                                                     <div className="flex items-center space-x-3">
                                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold
@@ -2210,7 +2330,7 @@ const WorkspaceCanvas = () => {
                                     })()}
 
                                     {/* 🆕 CONFIDENCE DETAILS COLLAPSIBLE */}
-                                    <details className="group bg-surface/50 border border-border rounded-2xl transition-all hover:border-primary/30">
+                                    <details className="group glass-panel rounded-2xl transition-all hover:border-primary/30">
                                         <summary className="px-6 py-4 cursor-pointer flex items-center justify-between">
                                             <div className="flex items-center space-x-3">
                                                 <span className="material-icons text-green-400 text-lg">verified</span>
@@ -2304,7 +2424,7 @@ const WorkspaceCanvas = () => {
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                             {/* Confidence Card */}
-                                            <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
+                                            <div className="glass-card rounded-2xl p-6 flex flex-col justify-center items-center text-center">
                                                 <div className="relative w-24 h-24 mb-3">
                                                     <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                                                         <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2E3645" strokeWidth="4" />
@@ -2354,7 +2474,7 @@ const WorkspaceCanvas = () => {
                                             </div>
 
                                             {/* Score Card */}
-                                            <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
+                                            <div className="glass-card rounded-2xl p-6 flex flex-col justify-center items-center text-center">
                                                 <div className="text-3xl font-bold text-white mb-3">
                                                     {(() => {
                                                         // Find the selected provider's score from rankings
@@ -2378,7 +2498,7 @@ const WorkspaceCanvas = () => {
                                             </div>
 
                                             {/* Basis Card */}
-                                            <div className="col-span-1 md:col-span-2 bg-surface border border-border rounded-2xl p-6">
+                                            <div className="col-span-1 md:col-span-2 glass-card rounded-2xl p-6">
                                                 <h4 className="text-xs text-gray-500 uppercase font-bold mb-4">Estimate Based On</h4>
                                                 <div className="grid grid-cols-3 gap-4">
                                                     <div>
@@ -2425,26 +2545,62 @@ const WorkspaceCanvas = () => {
                                                     </div>
                                                 </div>
 
+                                                {/* ✅ NEW: View Included Services Collapsible Dropdown */}
                                                 <div className="mt-6 pt-4 border-t border-white/5">
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {(() => {
-                                                            // Try to get services from recommended path first
-                                                            const recommendedServices = costEstimation.recommended?.provider === selectedProvider
-                                                                ? costEstimation.recommended.services
-                                                                : null;
+                                                    <details className="group">
+                                                        <summary className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-3 cursor-pointer flex items-center justify-between list-none hover:text-white transition-colors">
+                                                            <div className="flex items-center">
+                                                                <span className="material-icons text-sm mr-2 group-open:rotate-180 transition-transform">expand_more</span>
+                                                                <span>View Included Services</span>
+                                                            </div>
+                                                            <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full">
+                                                                {(() => {
+                                                                    const recommendedServices = costEstimation.recommended?.provider === selectedProvider
+                                                                        ? costEstimation.recommended.services
+                                                                        : null;
+                                                                    const services = recommendedServices || costEstimation.provider_details?.[selectedProvider || 'aws']?.services || [];
+                                                                    return services.length;
+                                                                })()}
+                                                            </span>
+                                                        </summary>
 
-                                                            // Fallback to provider_details if recommended doesn't match or doesn't have services
-                                                            const services = recommendedServices || costEstimation.provider_details?.[selectedProvider || 'aws']?.services || [];
+                                                        <div className="animate-fade-in mt-3 space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                                                            {(() => {
+                                                                const recommendedServices = costEstimation.recommended?.provider === selectedProvider
+                                                                    ? costEstimation.recommended.services
+                                                                    : null;
+                                                                const services = recommendedServices || costEstimation.provider_details?.[selectedProvider || 'aws']?.services || [];
 
-                                                            return services
-                                                                .slice(0, 6)
-                                                                .map((s, idx) => (
-                                                                    <span key={idx} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-gray-300">
-                                                                        {s.cloud_service || s.display_name}
-                                                                    </span>
+                                                                return services.map((s, idx) => (
+                                                                    <div key={idx} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                                                                        <div className="flex items-center space-x-3">
+                                                                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                                                <span className="material-icons text-primary text-sm">
+                                                                                    {s.icon || 'cloud'}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="text-sm font-medium text-white">
+                                                                                    {s.display_name || s.cloud_service || s.service_id}
+                                                                                </div>
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {s.cloud_service || s.category || 'Infrastructure'}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            <div className="text-sm font-bold text-white">
+                                                                                ${typeof s.monthly_cost === 'number' ? s.monthly_cost.toFixed(2) : (s.cost || '0.00')}
+                                                                            </div>
+                                                                            <div className="text-xs text-gray-500">
+                                                                                /month
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
                                                                 ));
-                                                        })()}
-                                                    </div>
+                                                            })()}
+                                                        </div>
+                                                    </details>
                                                 </div>
 
                                                 {/* Recommendation Details - Collapsible with Cost */}
@@ -2508,14 +2664,23 @@ const WorkspaceCanvas = () => {
                                                     </div>
                                                 )}
 
+
                                             </div>
                                         </div>
 
+                                        {/* Detailed Cost Breakdown */}
+                                        <div className="mt-8">
+                                            <CostBreakdown
+                                                services={costEstimation.services || []}
+                                                currency={costEstimation.currency || 'USD'}
+                                            />
+                                        </div>
+
                                         {/* Action Buttons Footer */}
-                                        <div className="flex justify-between items-center pt-8 border-t border-white/5">
+                                        <div className="flex justify-between items-center justify-end gap-3 pt-8 px-2 border-t border-white/5">
                                             <button
                                                 onClick={() => transitionToStep('usage_review')}
-                                                className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
+                                                className="px-2 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
                                             >
                                                 <span className="material-icons">arrow_back</span>
                                                 <span>Back to Usage Review</span>
@@ -2523,7 +2688,7 @@ const WorkspaceCanvas = () => {
 
                                             <button
                                                 onClick={() => transitionToStep('architecture')}
-                                                className="px-8 py-4 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center space-x-2"
+                                                className="px-2 py-3 bg-primary hover:bg-primary-hover text-black font-bold rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center space-x-2"
                                             >
                                                 <span>View Architecture Diagram</span>
                                                 <span className="material-icons text-sm">arrow_forward</span>
@@ -2562,11 +2727,8 @@ const WorkspaceCanvas = () => {
                                     onDiagramImageSave={setDiagramImage}
                                     onNext={(method) => {
                                         setDeploymentMethod(method);
-                                        if (method === 'self') {
-                                            transitionToStep('feedback');
-                                        } else if (method === 'oneclick') {
-                                            transitionToStep('terraform_view');
-                                        }
+                                        // 🔥 FIX: Both deploy methods go to feedback FIRST
+                                        transitionToStep('feedback');
                                     }}
                                     onBack={() => transitionToStep('cost_estimation')}
                                     isDeployed={isDeployed}
@@ -2591,8 +2753,9 @@ const WorkspaceCanvas = () => {
                                     onDeploySuccess={() => {
                                         setIsDeployed(true);
                                         setIsProjectLive(true);
-                                        transitionToStep('deployment_ready');
                                         handleSaveDraft(true);
+                                        // 🔥 FIX: Go to deployment summary after one-click deploy success
+                                        transitionToStep('deployment_summary');
                                     }}
                                 />
                             )}
@@ -2608,21 +2771,44 @@ const WorkspaceCanvas = () => {
                                     onNext={() => transitionToStep('terraform_view')}
                                     onBack={() => transitionToStep('architecture')}
                                     isDeployed={isDeployed}
+                                    deploymentMethod={deploymentMethod}
                                 />
                             )}
 
                             {/* STEP 5: DEPLOY TERRAFORM (Infrastructure) */}
+                            {/* STEP 5: DEPLOY TERRAFORM (Infrastructure) OR CONNECT CLOUD */}
                             {step === 'terraform_view' && (
-                                <DeployTerraformStep
-                                    workspaceId={workspaceId}
-                                    infraSpec={infraSpec}
-                                    selectedProvider={selectedProvider}
-                                    costEstimation={costEstimation}
-                                    setConnection={setConnection}
-                                    onComplete={() => transitionToStep('terraform_provision')}
-                                    onBack={() => transitionToStep('feedback')}
-                                    isDeployed={isDeployed}
-                                />
+                                deploymentMethod === 'self' ? (
+                                    <TerraformStep
+                                        workspaceId={workspaceId}
+                                        infraSpec={infraSpec}
+                                        selectedProvider={selectedProvider}
+                                        costEstimation={costEstimation}
+                                        onComplete={() => transitionToStep('deployment_summary')}
+                                        onBack={() => transitionToStep('feedback')}
+                                        isDeployed={isDeployed}
+                                        onDeploy={() => {
+                                            setIsDeployed(true);
+                                            setIsProjectLive(true);
+                                        }}
+                                    />
+                                ) : (
+                                    <DeployTerraformStep
+                                        workspaceId={workspaceId}
+                                        infraSpec={infraSpec}
+                                        selectedProvider={selectedProvider}
+                                        costEstimation={costEstimation}
+                                        setConnection={setConnection}
+                                        onComplete={() => transitionToStep('terraform_provision')}
+                                        onBack={() => transitionToStep('feedback')}
+                                        isDeployed={isDeployed}
+                                        onResetWorkspace={() => {
+                                            setIsDeployed(false);
+                                            setProvisioningState({});
+                                            setStep('terraform_view');
+                                        }}
+                                    />
+                                )
                             )}
 
                             {/* STEP: PROVISION INFRASTRUCTURE (Terraform Apply) */}
@@ -2847,7 +3033,7 @@ const WorkspaceCanvas = () => {
 
                                                         toast.success('🚀 Project marked as Self-Deployed!', { duration: 4000 });
                                                         setIsDeployed(true);
-                                                        navigate('/workspaces');
+                                                        // Stay on summary page - user can click dashboard button
                                                     } catch (error) {
                                                         handleApiError(error, 'Failed to confirm deployment.');
                                                     } finally {

@@ -10,7 +10,8 @@ const DeployTerraformStep = ({
     selectedProvider,
     setConnection,
     onComplete,
-    onBack
+    onBack,
+    onResetWorkspace
 }) => {
     // ─── STATE ───────────────────────────────────────────────────────────────────
     const [loading, setLoading] = useState(true);
@@ -57,14 +58,16 @@ const DeployTerraformStep = ({
             });
             const existingConn = wsRes.data.state_json?.connection;
 
-            if (existingConn?.status === 'connected') {
-                console.log('[DeployTerraformStep] Workspace already connected');
+            if (existingConn?.status === 'connected' && existingConn.provider?.toLowerCase() === providerKey) {
+                console.log('[DeployTerraformStep] Workspace already connected with matching provider');
                 setConnectionStatus('connected');
                 setConnectionData(existingConn);
                 if (setConnection) setConnection(existingConn);
                 setLoading(false);
                 ensureTerraformGenerated();
                 return;
+            } else if (existingConn?.status === 'connected') {
+                console.log('[DeployTerraformStep] Workspace connected to different provider:', existingConn.provider);
             }
 
             // Check for saved user-level connection
@@ -146,9 +149,11 @@ const DeployTerraformStep = ({
                     if (setConnection) setConnection(conn); // 🔥 Sync to parent
                     stopPolling();
                 } else {
-                    // Different provider selected - need to reconnect
-                    console.log('[DeployTerraformStep] Provider mismatch, need reconnection');
-                    setConnectionStatus('disconnected');
+                    // Different provider selected - need to reconnect (silent check)
+                    // console.log('[DeployTerraformStep] Provider mismatch, needs reconnection for:', selectedProvider);
+                    if (connectionStatus !== 'disconnected') setConnectionStatus('disconnected');
+                    if (connectionData !== null) setConnectionData(null);
+                    if (setConnection) setConnection(null);
                 }
             } else {
                 setConnectionStatus('disconnected');
@@ -272,7 +277,20 @@ const DeployTerraformStep = ({
                     toast.success('CloudFormation stack deletion initiated');
                 } catch (stackErr) {
                     console.warn('Stack deletion warning:', stackErr);
-                    toast.error('Stack deletion may require manual cleanup in AWS Console');
+                    const manualSteps = stackErr.response?.data?.manual_steps || 'Please delete the CloudiverseAccess-* stack manually from AWS Console > CloudFormation';
+                    const errorDetails = stackErr.response?.data?.details || stackErr.message;
+
+                    toast.error(
+                        <div>
+                            <div className="font-bold">Stack Deletion Failed</div>
+                            <div className="text-xs mt-1">{errorDetails}</div>
+                            <div className="mt-2 text-xs bg-white/10 p-2 rounded">
+                                <strong>Action Required:</strong><br />
+                                {manualSteps}
+                            </div>
+                        </div>,
+                        { duration: 10000 }
+                    );
                 }
 
                 // Delete saved user connection
@@ -287,6 +305,7 @@ const DeployTerraformStep = ({
             setAwsSetup({ url: '', externalId: '', accountId: '' });
             setAwsAccountId('');
             if (setConnection) setConnection(null);
+            if (onResetWorkspace) onResetWorkspace();
 
             toast.success(deleteStack ? "Fully disconnected and stack deleted" : "Disconnected successfully");
         } catch (err) {
@@ -398,7 +417,7 @@ const DeployTerraformStep = ({
                                     <div className="mt-6 flex flex-wrap items-center gap-3 animate-fade-in">
                                         <button
                                             onClick={onComplete}
-                                            className="btn-success px-6 py-2.5 flex items-center gap-2 shadow-lg hover:translate-x-1 transition-transform"
+                                            className="btn-success px-4 py-2 md:px-6 md:py-2.5 flex items-center gap-2 shadow-lg hover:translate-x-1 transition-transform text-sm md:text-base"
                                         >
                                             Start Provisioning <span className="material-icons text-sm">arrow_forward</span>
                                         </button>
@@ -408,7 +427,7 @@ const DeployTerraformStep = ({
                                             <div className="relative group">
                                                 <button
                                                     disabled={isDisconnecting}
-                                                    className="px-4 py-2.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-lg border border-red-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                                                    className="px-3 py-2 md:px-4 md:py-2.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-lg border border-red-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
                                                 >
                                                     {isDisconnecting ? (
                                                         <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
@@ -443,7 +462,7 @@ const DeployTerraformStep = ({
                                             <button
                                                 onClick={() => handleDisconnect(false)}
                                                 disabled={isDisconnecting}
-                                                className="px-4 py-2.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-lg border border-red-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                                                className="px-3 py-2 md:px-4 md:py-2.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-lg border border-red-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
                                             >
                                                 {isDisconnecting ? (
                                                     <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
@@ -512,8 +531,8 @@ const DeployTerraformStep = ({
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button onClick={handleConnect} className="btn-primary px-6 py-2.5 shadow-lg shadow-primary/20 hover:shadow-primary/30 transform hover:-translate-y-0.5 transition-all">
-                                                Connect {selectedProvider} Account
+                                            <button onClick={handleConnect} className="btn-primary px-4 py-2 md:px-6 md:py-2.5 shadow-lg shadow-primary/20 hover:shadow-primary/30 transform hover:-translate-y-0.5 transition-all text-sm md:text-base whitespace-nowrap">
+                                                Connect {selectedProvider}
                                             </button>
                                         )}
                                     </div>

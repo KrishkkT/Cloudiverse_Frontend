@@ -16,7 +16,8 @@ const TerraformStep = ({
     onBack,
     isDeployed,
     onTerraformLoaded, // 🔥 New prop
-    onDeploy // 🔥 New prop for self-deploy updates
+    onDeploy, // 🔥 New prop for self-deploy updates
+    onNavigateToFeedback // 🔥 NEW: Navigate to feedback step after self-deploy
 }) => {
     const [loading, setLoading] = useState(true);
     const [terraformProject, setTerraformProject] = useState(null); // V2: Folder structure
@@ -260,7 +261,8 @@ const TerraformStep = ({
 
                 setIsSelfDeployed(true);
                 if (onDeploy) onDeploy();
-                toast.success('Project marked as Self-Deployed');
+                toast.success('Download complete - Deploy manually');
+                // Note: Feedback step triggers AFTER user marks as self-deployed, not after download
             }, 1000);
 
         } catch (err) {
@@ -534,7 +536,9 @@ const TerraformStep = ({
 
                             toast.success('Project marked as Self-Deployed', { id: loadingId });
                             setIsSelfDeployed(true);
-                            if (onComplete) onComplete(); // Optional: trigger completion callback
+                            if (onDeploy) onDeploy();
+                            // 🔥 FIX: Go to summary page after self-deploy
+                            if (onComplete) onComplete();
                         } catch (err) {
                             console.error(err);
                             toast.error('Failed to mark deployment.');
@@ -544,7 +548,7 @@ const TerraformStep = ({
                 />
             </div>
 
-            <div className="flex justify-between items-center pt-8 border-t border-white/5 mt-8">
+            <div className="flex justify-between items-center justify-end gap-3 pt-8 px-2 border-t border-white/5">
                 <button
                     onClick={onBack}
                     className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-medium hover:bg-white/10 transition-colors flex items-center space-x-2"
@@ -555,7 +559,7 @@ const TerraformStep = ({
 
                 <button
                     onClick={onComplete}
-                    className="px-8 py-4 bg-primary hover:bg-primary/90 border border-primary/20 rounded-xl text-black font-bold transition-all flex items-center space-x-3"
+                    className="px-8 py-3 bg-primary hover:bg-primary/90 border border-primary/20 rounded-xl text-black font-bold transition-all flex items-center space-x-3"
                 >
                     <span className="material-icons">summarize</span>
                     <span>View Summary</span>

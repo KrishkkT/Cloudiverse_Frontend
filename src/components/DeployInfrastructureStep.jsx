@@ -19,6 +19,7 @@ const DeployInfrastructureStep = ({
     const [logs, setLogs] = useState([]);
     const [deployJobId, setDeployJobId] = useState(null);
     const [showDestroyConfirm, setShowDestroyConfirm] = useState(false);
+    const [confirmText, setConfirmText] = useState('');
     const logEndRef = useRef(null);
     const pollingRef = useRef(null); // 🔥 Track active polling interval
     const isPro = userPlan === 'pro' || userPlan === 'enterprise';
@@ -314,9 +315,9 @@ const DeployInfrastructureStep = ({
                         </div>
                     )}
 
+                    {/* Created Services Summary (Success Only) */}
                     {deployStatus === 'success' && (
-                        <div className="mt-6 space-y-4 animate-fade-in">
-                            {/* Created Services Summary */}
+                        <div className="mt-6 space-y-4 animate-fade-in mb-6">
                             <div className="bg-secondary/5 border border-secondary/20 rounded-xl p-4">
                                 <h4 className="font-semibold text-secondary flex items-center gap-2 mb-3">
                                     <span className="material-icons text-lg">check_circle</span>
@@ -345,104 +346,106 @@ const DeployInfrastructureStep = ({
                                     )}
                                 </div>
                             </div>
+                        </div>
+                    )}
 
-                            {/* Destroy Button (Pro Only) */}
-                            <div className="mt-4 p-4 border border-border rounded-lg bg-surface/50">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h5 className="font-medium text-text-primary flex items-center gap-2">
-                                            <span className="material-icons text-lg text-red-500">delete_forever</span>
-                                            Destroy Infrastructure
-                                        </h5>
-                                        <p className="text-xs text-text-secondary mt-1">
-                                            Remove all deployed resources from your cloud account
-                                        </p>
-                                    </div>
-                                    {isPro ? (
+                    {/* Destroy Button (Visible for Success AND Failed) */}
+                    {(deployStatus === 'success' || deployStatus === 'failed') && (
+                        <div className="mt-4 p-4 border border-border rounded-lg bg-surface/50">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h5 className="font-medium text-text-primary flex items-center gap-2">
+                                        <span className="material-icons text-lg text-red-500">delete_forever</span>
+                                        Destroy Infrastructure
+                                    </h5>
+                                    <p className="text-xs text-text-secondary mt-1">
+                                        Remove all deployed resources (clean up failure or teardown)
+                                    </p>
+                                </div>
+                                {isPro ? (
+                                    <button
+                                        onClick={() => { setShowDestroyConfirm(true); setConfirmText(''); }}
+                                        disabled={destroyStatus === 'running'}
+                                        className="px-4 py-2 text-sm flex items-center gap-2 rounded-md border border-red-500 text-red-500 transition-all duration-200 hover:bg-red-600 hover:text-white hover:border-red-600"
+                                    >
+                                        {destroyStatus === 'running' ? (
+                                            <>
+                                                <span className="animate-spin material-icons text-sm">refresh</span>
+                                                Destroying...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="material-icons text-sm">delete</span>
+                                                Destroy
+                                            </>
+                                        )}
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-text-subtle bg-primary/10 text-primary px-2 py-1 rounded">
+                                            Pro Only
+                                        </span>
                                         <button
-                                            onClick={() => setShowDestroyConfirm(true)}
-                                            disabled={destroyStatus === 'running'}
-                                            className="px-4 py-2 text-sm flex items-center gap-2 rounded-md border border-red-500 text-red-500 transition-all duration-200 hover:bg-red-600 hover:text-white hover:border-red-600"
+                                            onClick={() => window.location.href = '/pricing'}
+                                            className="btn-primary btn-sm text-xs"
                                         >
-                                            {destroyStatus === 'running' ? (
-                                                <>
-                                                    <span className="animate-spin material-icons text-sm">refresh</span>
-                                                    Destroying...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <span className="material-icons text-sm">delete</span>
-                                                    Destroy
-                                                </>
-                                            )}
+                                            Upgrade
                                         </button>
-                                    ) : (
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-text-subtle bg-primary/10 text-primary px-2 py-1 rounded">
-                                                Pro Only
-                                            </span>
-                                            <button
-                                                onClick={() => window.location.href = '/pricing'}
-                                                className="btn-primary btn-sm text-xs"
-                                            >
-                                                Upgrade
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Confirm Destroy Dialog */}
-                            {showDestroyConfirm && (
-                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                                    <div className="bg-surface rounded-xl p-6 max-w-md mx-4 shadow-2xl border border-border">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <span className="material-icons text-3xl text-red-500">warning</span>
-                                            <h3 className="text-lg font-semibold text-text-primary">Confirm Destroy</h3>
-                                        </div>
-                                        <div className="mb-4">
-                                            <label className="block text-sm text-text-secondary mb-2">
-                                                To confirm, type <strong>DELETE</strong> below:
-                                            </label>
-                                            <input
-                                                type="text"
-                                                className="w-full bg-background border border-border rounded p-2 text-text-primary focus:border-red-500 focus:outline-none"
-                                                placeholder="DELETE"
-                                                onChange={(e) => {
-                                                    const btn = document.getElementById('confirm-destroy-btn');
-                                                    if (btn) btn.disabled = e.target.value !== 'DELETE';
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="flex gap-3 justify-end">
-                                            <button
-                                                onClick={() => setShowDestroyConfirm(false)}
-                                                className="btn-secondary px-4 py-2"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                id="confirm-destroy-btn"
-                                                onClick={handleDestroy}
-                                                disabled={true}
-                                                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                                            >
-                                                Yes, Destroy Everything
-                                            </button>
-                                        </div>
                                     </div>
-                                </div>
-                            )}
-
-                            <div className="flex justify-end">
-                                <button onClick={onComplete} className="btn-success btn-lg flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                                    Continue to Application <span className="material-icons">arrow_forward</span>
-                                </button>
+                                )}
                             </div>
+                        </div>
+                    )}
+
+                    {/* Navigation Buttons */}
+                    {deployStatus === 'success' && (
+                        <div className="flex justify-end mt-6">
+                            <button onClick={onComplete} className="btn-success btn-lg flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                                Continue to Application <span className="material-icons">arrow_forward</span>
+                            </button>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Confirm Destroy Dialog */}
+            {showDestroyConfirm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+                    <div className="bg-surface rounded-xl p-6 max-w-md mx-4 shadow-2xl border border-border">
+                        <div className="flex items-center gap-3 mb-4">
+                            <span className="material-icons text-3xl text-red-500">warning</span>
+                            <h3 className="text-lg font-semibold text-text-primary">Confirm Destroy</h3>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm text-text-secondary mb-2">
+                                To confirm, type <strong>DELETE</strong> below:
+                            </label>
+                            <input
+                                type="text"
+                                className="w-full bg-background border border-border rounded p-2 text-text-primary focus:border-red-500 focus:outline-none"
+                                placeholder="DELETE"
+                                value={confirmText}
+                                onChange={(e) => setConfirmText(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setShowDestroyConfirm(false)}
+                                className="btn-secondary px-4 py-2"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDestroy}
+                                disabled={confirmText !== 'DELETE'}
+                                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                            >
+                                Yes, Destroy Everything
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex justify-start">
                 <button onClick={onBack} className="text-text-secondary hover:text-text-primary text-sm flex items-center gap-2">

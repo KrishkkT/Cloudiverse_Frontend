@@ -223,17 +223,37 @@ const WorkspaceSelector = () => {
 
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
-          <div>
-            <h1 className="text-4xl font-extrabold text-text-primary tracking-tight flex items-center gap-3">
-              Welcome, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-500">{user?.name || 'User'}</span>
-              {isPro && (
-                <span className="px-3 py-1 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 border border-yellow-400/30 rounded-full text-xs font-bold text-yellow-400 flex items-center gap-1 shadow-[0_0_15px_rgba(250,204,21,0.2)]">
-                  <Crown className="w-3.5 h-3.5 fill-yellow-400" /> PRO
-                </span>
-              )}
+          <div className="w-full md:w-auto">
+            <h1 className="text-4xl font-extrabold text-text-primary tracking-tight flex flex-col md:block items-start gap-1 md:gap-3">
+              <span>Welcome,</span>
+              <span className="flex items-center gap-2">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-500">{user?.name || 'User'}</span>
+                {isPro && (
+                  <span className="px-3 py-1 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 border border-yellow-400/30 rounded-full text-xs font-bold text-yellow-400 flex items-center gap-1 shadow-[0_0_15px_rgba(250,204,21,0.2)]">
+                    <Crown className="w-3.5 h-3.5 fill-yellow-400" /> PRO
+                  </span>
+                )}
+              </span>
             </h1>
             <p className="text-text-secondary mt-2 text-lg">Manage and organize your cloud infrastructure projects</p>
           </div>
+
+          {/* Mobile Nav Grid - 2x2 */}
+          <div className="grid grid-cols-2 gap-2 w-full md:hidden">
+            <button onClick={() => navigate('/')} className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary text-sm font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors">
+              <Home className="w-4 h-4" /> <span>Home</span>
+            </button>
+            <button onClick={() => navigate('/settings')} className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary text-sm font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors">
+              <Settings className="w-4 h-4" /> <span>Settings</span>
+            </button>
+            <button onClick={handleLogout} className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-medium flex items-center justify-center gap-2 hover:bg-red-500/20 transition-colors">
+              <LogOut className="w-4 h-4" /> <span>Logout</span>
+            </button>
+            <button onClick={handleCreateNewWorkspace} className="px-3 py-2 bg-primary text-white rounded-xl text-sm font-semibold shadow-lg flex items-center justify-center gap-2 hover:shadow-primary/40 transition-all">
+              <PlusCircle className="w-5 h-5" /> <span>New Project</span>
+            </button>
+          </div>
+
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 hidden md:flex">
             <button onClick={() => navigate('/')} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-text-primary font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition-colors">
               <Home className="w-4 h-4" /> <span>Home</span>
@@ -275,9 +295,9 @@ const WorkspaceSelector = () => {
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
               <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-surface border border-border rounded-xl text-text-primary focus:ring-2 focus:ring-primary/50" />
-            </div>
-            <div className="relative min-w-[200px]">
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full h-full px-4 bg-surface border border-border rounded-xl text-text-primary focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer">
+            </div><br />
+            <div className="relative min-w-[200px] hidden md:block">
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full h-full px-4 py-3 md:py-0 bg-surface border border-border rounded-xl text-text-primary focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer">
                 <option value="all">All Projects</option>
                 <option value="live">Live</option>
                 <option value="not_deployed">Not Deployed</option>
@@ -286,10 +306,31 @@ const WorkspaceSelector = () => {
             </div>
             <button
               onClick={() => navigate('/feedback')}
-              className="px-4 py-3 bg-surface border border-border rounded-xl text-text-primary hover:border-primary/50 hover:bg-surface/80 transition-all flex items-center gap-2 font-medium"
+              className="hidden md:flex px-4 py-3 bg-surface border border-border rounded-xl text-text-primary hover:border-primary/50 hover:bg-surface/80 transition-all items-center justify-center gap-2 font-medium"
             >
               <div className="w-5 h-5 flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+              </div>
+              <span>Feedback</span>
+            </button>
+          </div>
+
+          {/* Mobile Specific Filter Row */}
+          <div className="flex gap-3 md:hidden">
+            <div className="relative flex-1">
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full h-full px-3 py-2 bg-surface border border-border rounded-xl text-text-primary text-sm focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer">
+                <option value="all">All Projects</option>
+                <option value="live">Live</option>
+                <option value="not_deployed">Not Deployed</option>
+              </select>
+              <Filter className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+            </div>
+            <button
+              onClick={() => navigate('/feedback')}
+              className="px-3 py-2 bg-surface border border-border rounded-xl text-text-primary text-sm hover:border-primary/50 hover:bg-surface/80 transition-all flex items-center justify-center gap-2 font-medium flex-1"
+            >
+              <div className="w-4 h-4 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
               </div>
               <span>Feedback</span>
             </button>
@@ -307,10 +348,10 @@ const WorkspaceSelector = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fade-in-up">
             {filteredWorkspaces.map((workspace) => (
-              <div key={workspace.id} onClick={() => navigate(`/workspaces/${workspace.id}`)} className="group relative bg-surface border border-border rounded-2xl overflow-hidden hover:border-primary/50 transition-all cursor-pointer flex flex-col hover:shadow-xl">
+              <div key={workspace.id} onClick={() => navigate(`/workspaces/${workspace.id}`)} className="group relative glass-card rounded-2xl overflow-hidden cursor-pointer flex flex-col">
                 <div className="p-6 flex-1">
                   <div className="flex justify-between items-start mb-6">
-                    <div className="p-3 bg-background rounded-xl border border-border"><LayoutGrid className="w-6 h-6 text-primary" /></div>
+                    <div className="p-3 bg-surface/50 rounded-xl border border-white/10"><LayoutGrid className="w-6 h-6 text-primary" /></div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={(e) => {
@@ -339,7 +380,7 @@ const WorkspaceSelector = () => {
                       )}
                     </div>
                   </div>
-                  <h3 className="text-xl font-bold text-text-primary mb-2 line-clamp-1">{workspace.name}</h3>
+                  <h3 className="text-xl font-bold text-text-primary mb-2 line-clamp-2 min-h-[56px]">{workspace.name}</h3>
                   <p className="text-text-secondary text-sm line-clamp-2 mb-6 h-10">{workspace.description || "No description"}</p>
 
                   <div className="flex items-center justify-between pt-6 border-t border-border mt-auto">

@@ -325,7 +325,7 @@ const ArchitectureStep = ({
 
             {/* Architecture Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-surface border border-border rounded-2xl p-6">
+                <div className="glass-card rounded-2xl p-6">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Provider</h3>
                     <div className="flex items-center space-x-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold
@@ -338,7 +338,7 @@ const ArchitectureStep = ({
                         </div>
                     </div>
                 </div>
-                <div className="bg-surface border border-border rounded-2xl p-6">
+                <div className="glass-card rounded-2xl p-6">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Scenario</h3>
                     <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
@@ -355,7 +355,7 @@ const ArchitectureStep = ({
             </div>
 
             {/* Architecture Diagram Section */}
-            <div className="bg-surface border border-border rounded-2xl p-6">
+            <div className="glass-panel rounded-2xl p-6">
                 <h3 className="text-lg font-bold text-white mb-6 flex items-center">
                     <span className="material-icons mr-2">design_services</span>
                     Architecture Diagram
@@ -376,7 +376,7 @@ const ArchitectureStep = ({
             </div>
 
             {/* Services List */}
-            <div className="bg-surface border border-border rounded-2xl p-6">
+            <div className="glass-panel rounded-2xl p-6">
                 <h3 className="text-lg font-bold text-white mb-6 flex items-center">
                     <span className="material-icons mr-2">inventory</span>
                     Services Used ({selectedProvider === 'AZURE' ? 'Azure' : selectedProvider})
@@ -487,7 +487,7 @@ const ArchitectureStep = ({
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#1A1D24] border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+                            className="glass-modal rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
                             onClick={e => e.stopPropagation()}
                         >
                             {/* Popup Header */}
@@ -557,7 +557,7 @@ const ArchitectureStep = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Self Deployment Option */}
                     {isDeployed ? (
-                        <div className="p-6 bg-surface border border-border rounded-2xl opacity-60 cursor-not-allowed">
+                        <div className="p-6 glass-card rounded-2xl opacity-60 cursor-not-allowed">
                             <div className="flex items-center space-x-4 mb-4">
                                 <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
                                     <span className="material-icons text-blue-400 text-2xl">visibility</span>
@@ -625,7 +625,7 @@ const ArchitectureStep = ({
                                 }
                                 onNext('self');
                             }}
-                            className="p-6 bg-surface border border-border rounded-2xl hover:border-primary/50 transition-all group text-left"
+                            className="p-6 glass-card rounded-2xl hover:border-primary/50 transition-all group text-left"
                         >
                             <div className="flex items-center space-x-4 mb-4">
                                 <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
@@ -644,7 +644,7 @@ const ArchitectureStep = ({
 
                     {/* One-Click Deployment Option */}
                     {isDeployed ? (
-                        <div className="p-6 bg-surface border border-border rounded-2xl opacity-40 cursor-not-allowed text-left relative">
+                        <div className="p-6 glass-card rounded-2xl opacity-40 cursor-not-allowed text-left relative">
                             <div className="absolute top-3 right-3 px-2 py-1 bg-gradient-to-r from-gray-600 to-gray-700 text-white text-[10px] font-bold rounded-full">
                                 DISABLED
                             </div>
@@ -669,7 +669,7 @@ const ArchitectureStep = ({
                         <button
                             onClick={() => onNext('oneclick')}
                             disabled={isDeployed}
-                            className={`p-6 bg-surface border border-border rounded-2xl transition-all group text-left relative hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/10 cursor-pointer`}
+                            className={`p-6 glass-card rounded-2xl transition-all group text-left relative hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/10 cursor-pointer`}
                         >
                             <div className="absolute top-3 right-3 px-2 py-1 bg-gradient-to-r from-green-400 to-emerald-500 text-black text-[10px] font-bold rounded-full animate-pulse">
                                 NEW

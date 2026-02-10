@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer
 } from 'recharts';
 import { ArrowUpDown, Check, Cloud, Server, Database, HardDrive } from 'lucide-react';
@@ -135,18 +135,17 @@ const CloudComparison = () => {
     <div className="space-y-8 fade-in">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Cloud Comparison</h1>
-          <p className="text-text-secondary mt-1">Compare services across cloud providers</p>
+          <h1 className="text-2xl md:text-3xl font-bold whitespace-nowrap">Cloud Comparison</h1>
+          <p className="text-text-secondary mt-1 whitespace-nowrap">Compare services across cloud providers</p>
         </div>
         <div className="flex space-x-3">
           <button
             onClick={handleViewTerraform}
             disabled={!selectedProvider}
-            className={`btn flex items-center space-x-2 ${
-              selectedProvider 
-                ? 'btn-primary' 
+            className={`btn flex items-center space-x-2 ${selectedProvider
+                ? 'btn-primary'
                 : 'btn-secondary opacity-50 cursor-not-allowed'
-            }`}
+              }`}
           >
             <Check size={18} />
             <span>Continue with {selectedProvider || 'Provider'}</span>
@@ -161,14 +160,13 @@ const CloudComparison = () => {
           { name: 'Microsoft Azure', id: 'azure', color: 'bg-blue-500/20 text-blue-500', total: getTotalCost('azure') },
           { name: 'Google Cloud Platform', id: 'gcp', color: 'bg-green-500/20 text-green-500', total: getTotalCost('gcp') }
         ].map((provider) => (
-          <div 
+          <div
             key={provider.id}
             onClick={() => handleSelectProvider(provider.name)}
-            className={`card p-6 cursor-pointer transition-all ${
-              selectedProvider === provider.name 
-                ? 'ring-2 ring-primary border-primary/30 scale-[1.02]' 
+            className={`card p-6 cursor-pointer transition-all ${selectedProvider === provider.name
+                ? 'ring-2 ring-primary border-primary/30 scale-[1.02]'
                 : 'hover:scale-[1.02]'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between">
               <div>
@@ -210,12 +208,12 @@ const CloudComparison = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" />
                 <XAxis dataKey="name" stroke="#9CA3AF" />
                 <YAxis stroke="#9CA3AF" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#16181D', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#16181D',
                     borderColor: '#1F2937',
                     borderRadius: '0.5rem'
-                  }} 
+                  }}
                 />
                 <Legend />
                 <Bar dataKey="AWS" fill="#3B82F6" />
@@ -244,12 +242,12 @@ const CloudComparison = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" />
                 <XAxis dataKey="name" stroke="#9CA3AF" />
                 <YAxis stroke="#9CA3AF" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#16181D', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#16181D',
                     borderColor: '#1F2937',
                     borderRadius: '0.5rem'
-                  }} 
+                  }}
                 />
                 <Legend />
                 <Bar dataKey="AWS" fill="#3B82F6" />
@@ -319,7 +317,7 @@ const CloudComparison = () => {
           </div>
         </div>
       </div>
-      
+
       {/* AI Dock */}
       <AIDock />
     </div>
