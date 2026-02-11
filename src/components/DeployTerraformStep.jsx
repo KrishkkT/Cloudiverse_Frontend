@@ -562,9 +562,10 @@ const DeployTerraformStep = ({
                                                                     placeholder="e.g. 12345678-abcd-1234-abcd-1234567890ab"
                                                                     className="w-full bg-background border border-border rounded-lg p-3 text-sm text-text-primary focus:border-primary outline-none"
                                                                 />
-                                                                <p className="text-[10px] text-text-secondary mt-2 leading-relaxed">
+                                                                <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
                                                                     Personal accounts often require a specific Tenant ID for Management API access.
-                                                                    Find it in your <a href="https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview" target="_blank" rel="noreferrer" className="text-primary hover:underline">Azure Portal Overview</a>.
+                                                                    Find it in your <a href="https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Azure Portal Overview</a><br />
+                                                                    After entering the Tenant ID, click on "Connect" button to proceed.
                                                                 </p>
                                                             </div>
                                                         )}
