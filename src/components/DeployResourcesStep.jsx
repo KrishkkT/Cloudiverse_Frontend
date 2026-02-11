@@ -77,7 +77,7 @@ const DeployResourcesStep = ({
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
             const conn = res.data.state_json?.connection;
-            if (conn && conn.provider?.toLowerCase() === provider.toLowerCase() && conn.status === 'connected') {
+            if (conn && conn.provider?.toLowerCase() === provider?.toLowerCase() && conn.status === 'connected') {
                 setConnectionStatus('connected');
             }
         } catch (err) {

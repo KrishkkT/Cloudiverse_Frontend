@@ -17,6 +17,8 @@ const DeployStep = ({
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const [connectionData, setConnectionData] = useState(null);
     const [awsSetup, setAwsSetup] = useState({ url: '', externalId: '', accountId: '' });
+    const [azureTenantId, setAzureTenantId] = useState('');
+    const [showAzureAdvanced, setShowAzureAdvanced] = useState(false);
 
     // Deployment State
     const [deployConfig, setDeployConfig] = useState({ repoUrl: '', dockerImage: '' });
@@ -56,7 +58,10 @@ const DeployStep = ({
         try {
             const token = localStorage.getItem('token');
             const res = await axios.post(`${API_BASE}/api/cloud/${provider.toLowerCase()}/connect`,
-                { workspace_id: workspace.id },
+                {
+                    workspace_id: workspace.id,
+                    tenant_id: provider?.toLowerCase() === 'azure' ? azureTenantId : undefined
+                },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -268,6 +273,36 @@ const DeployStep = ({
                                     <a href={awsSetup.url} target="_blank" rel="noreferrer" className="text-blue-400 text-sm font-bold hover:underline">
                                         Open AWS Console &rarr;
                                     </a>
+                                </div>
+                            )}
+
+                            {/* Azure Tenant ID Override (Hidden initially) */}
+                            {provider?.toLowerCase() === 'azure' && connectionStatus !== 'connected' && (
+                                <div className="mt-4">
+                                    <button
+                                        onClick={() => setShowAzureAdvanced(!showAzureAdvanced)}
+                                        className="text-xs text-gray-400 hover:text-white transition flex items-center gap-1"
+                                    >
+                                        <span className="material-icons text-[14px]">{showAzureAdvanced ? 'expand_less' : 'settings'}</span>
+                                        {showAzureAdvanced ? 'Hide Advanced Settings' : 'Using a Personal Account? Click here'}
+                                    </button>
+
+                                    {showAzureAdvanced && (
+                                        <div className="mt-3 p-4 bg-black/20 rounded-xl border border-white/5 animate-slide-down">
+                                            <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">Azure Tenant ID (GUID)</label>
+                                            <input
+                                                type="text"
+                                                value={azureTenantId}
+                                                onChange={(e) => setAzureTenantId(e.target.value)}
+                                                placeholder="e.g. 12345678-abcd-1234-abcd-1234567890ab"
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-blue-500/50 outline-none"
+                                            />
+                                            <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                                                Personal accounts often require a specific Tenant ID for Management API access.
+                                                Find it in your <a href="https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Azure Portal Overview</a>.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

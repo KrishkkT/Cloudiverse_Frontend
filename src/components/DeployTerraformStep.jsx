@@ -20,6 +20,8 @@ const DeployTerraformStep = ({
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
     const [connectionData, setConnectionData] = useState(null);
     const [awsSetup, setAwsSetup] = useState({ url: '', externalId: '', accountId: '' });
+    const [azureTenantId, setAzureTenantId] = useState('');
+    const [showAzureAdvanced, setShowAzureAdvanced] = useState(false);
 
     // AWS Manual Verification State
     const [awsAccountId, setAwsAccountId] = useState('');
@@ -217,7 +219,10 @@ const DeployTerraformStep = ({
             const token = localStorage.getItem('token');
             const providerKey = selectedProvider?.toLowerCase() || 'aws';
             const res = await axios.post(`${API_BASE}/cloud/${providerKey}/connect`,
-                { workspace_id: workspaceId },
+                {
+                    workspace_id: workspaceId,
+                    tenant_id: providerKey === 'azure' ? azureTenantId : undefined
+                },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -531,9 +536,41 @@ const DeployTerraformStep = ({
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button onClick={handleConnect} className="btn-primary px-4 py-2 md:px-6 md:py-2.5 shadow-lg shadow-primary/20 hover:shadow-primary/30 transform hover:-translate-y-0.5 transition-all text-sm md:text-base whitespace-nowrap">
-                                                Connect {selectedProvider}
-                                            </button>
+                                            <div className="space-y-4">
+                                                <button onClick={handleConnect} className="btn-primary px-4 py-2 md:px-6 md:py-2.5 shadow-lg shadow-primary/20 hover:shadow-primary/30 transform hover:-translate-y-0.5 transition-all text-sm md:text-base whitespace-nowrap">
+                                                    Connect {selectedProvider}
+                                                </button>
+
+                                                {/* Azure Tenant ID Override */}
+                                                {selectedProvider?.toLowerCase() === 'azure' && (
+                                                    <div className="mt-2">
+                                                        <button
+                                                            onClick={() => setShowAzureAdvanced(!showAzureAdvanced)}
+                                                            className="text-xs text-text-subtle hover:text-text-primary transition flex items-center gap-1"
+                                                        >
+                                                            <span className="material-icons text-[14px]">{showAzureAdvanced ? 'expand_less' : 'settings'}</span>
+                                                            {showAzureAdvanced ? 'Hide Advanced Settings' : 'Using a Personal Account? Click here'}
+                                                        </button>
+
+                                                        {showAzureAdvanced && (
+                                                            <div className="mt-3 p-4 bg-surface border border-border rounded-xl animate-slide-down">
+                                                                <label className="block text-[10px] font-black text-primary uppercase tracking-widest mb-2">Azure Tenant ID (GUID)</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={azureTenantId}
+                                                                    onChange={(e) => setAzureTenantId(e.target.value)}
+                                                                    placeholder="e.g. 12345678-abcd-1234-abcd-1234567890ab"
+                                                                    className="w-full bg-background border border-border rounded-lg p-3 text-sm text-text-primary focus:border-primary outline-none"
+                                                                />
+                                                                <p className="text-[10px] text-text-secondary mt-2 leading-relaxed">
+                                                                    Personal accounts often require a specific Tenant ID for Management API access.
+                                                                    Find it in your <a href="https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview" target="_blank" rel="noreferrer" className="text-primary hover:underline">Azure Portal Overview</a>.
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
 
