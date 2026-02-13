@@ -11,6 +11,7 @@ const DeployTerraformStep = ({
     setConnection,
     onComplete,
     onBack,
+    isDeployed,
     onResetWorkspace
 }) => {
     // ─── STATE ───────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ const DeployTerraformStep = ({
 
     const pollInterval = useRef(null);
     const hasInitialized = useRef(false);
+    const verifyFailCount = useRef(0);
 
     // Reset refs and check status on mount/navigation
     useEffect(() => {
@@ -41,6 +43,13 @@ const DeployTerraformStep = ({
         hasInitialized.current = false;
 
         if (workspaceId && selectedProvider) {
+            // If already deployed, skip verification entirely - connection was already established
+            if (isDeployed) {
+                console.log('[DeployTerraformStep] Workspace already deployed, skipping connection check');
+                setConnectionStatus('connected');
+                setLoading(false);
+                return;
+            }
             console.log('[DeployTerraformStep] Component mounted, checking for saved connection...');
             checkForSavedConnection();
         }
@@ -190,22 +199,25 @@ const DeployTerraformStep = ({
         setIsVerifying(true);
         try {
             const token = localStorage.getItem('token');
-            // 🧠 FIX: Use the same dynamic role naming pattern as the backend
-            const roleArn = `arn:aws:iam::${awsAccountId}:role/CloudiverseAccessRole-${awsSetup.externalId}`;
-
+            // Backend derives the correct role ARN(s) to try - we just send the account_id
             const res = await axios.post(`${API_BASE}/cloud/aws/verify`, {
                 workspace_id: workspaceId,
-                role_arn: roleArn,
                 external_id: awsSetup.externalId,
                 account_id: awsAccountId
             }, { headers: { Authorization: `Bearer ${token}` } });
 
             toast.success("AWS Connection Verified!");
+            verifyFailCount.current = 0; // Reset on success
             // Sync connection state immediately
             checkConnectionStatus();
         } catch (err) {
-            console.error("Verification failed", err);
-            toast.error("Verification failed: " + (err.response?.data?.msg || err.message));
+            verifyFailCount.current += 1;
+            const errorDetail = err.response?.data?.error || err.response?.data?.msg || err.message;
+            console.error(`Verification failed (attempt ${verifyFailCount.current}):`, errorDetail);
+            // Only show toast on first failure to avoid spam
+            if (verifyFailCount.current <= 1) {
+                toast.error("Verification failed: " + errorDetail);
+            }
         } finally {
             setIsVerifying(false);
         }
@@ -215,13 +227,19 @@ const DeployTerraformStep = ({
     useEffect(() => {
         let interval;
         // Only poll if we have the URL (setup started), a valid ID, and aren't connected yet
-        if (awsSetup.url && awsAccountId.length === 12 && connectionStatus !== 'connected') {
+        // Stop polling after 3 consecutive failures to prevent infinite 400 loops
+        // Never poll if workspace is already deployed
+        if (!isDeployed && awsSetup.url && awsAccountId.length === 12 && connectionStatus !== 'connected' && verifyFailCount.current < 3) {
             interval = setInterval(() => {
-                if (!isVerifying) handleAwsVerify();
+                if (!isVerifying && verifyFailCount.current < 3) {
+                    handleAwsVerify();
+                } else if (verifyFailCount.current >= 3) {
+                    clearInterval(interval);
+                }
             }, 5000);
         }
         return () => clearInterval(interval);
-    }, [awsSetup, awsAccountId, connectionStatus, isVerifying]);
+    }, [awsSetup, awsAccountId, connectionStatus, isVerifying, isDeployed]);
 
     const handleConnect = async () => {
         try {

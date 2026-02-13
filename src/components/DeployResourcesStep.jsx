@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { RefreshCw } from 'lucide-react';
@@ -15,9 +16,16 @@ const DeployResourcesStep = ({
     onUpdateWorkspace,
     onDeploySuccess  // 🔥 NEW: Callback to mark project as deployed
 }) => {
-    const provider = selectedProvider || 'aws';
+    const navigate = useNavigate();
     const { costEstimation, infraSpec, infra_outputs } = workspace?.state_json || {};
-    const region = workspace?.state_json?.region || infraSpec?.region?.resolved_region || 'Unknown';
+    const connection = workspace?.state_json?.connection || infraSpec?.connection || costEstimation?.connection || {};
+    const provider = selectedProvider || connection?.provider || costEstimation?.provider || infraSpec?.provider || 'aws';
+    const region = workspace?.state_json?.region
+        || infraSpec?.region?.resolved_region
+        || costEstimation?.region
+        || connection?.region
+        || infraSpec?.region?.user_preference
+        || 'Auto-detected';
 
     // Connection State
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
@@ -453,35 +461,48 @@ const DeployResourcesStep = ({
                     }
 
                     return (
-                        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-8 text-center animate-fade-in mt-6">
-                            <div className="inline-block p-4 bg-green-500/20 rounded-full mb-4">
-                                <span className="material-icons text-4xl text-green-400">check_circle</span>
-                            </div>
-                            <h3 className="text-3xl font-bold text-white mb-2">Deployed Successfully!</h3>
-                            <p className="text-gray-400 mb-8 max-w-lg mx-auto">Your application is now live. It may take a few minutes for DNS to propagate globally.</p>
-
-                            {liveUrl ? (
-                                <div className="flex flex-col md:flex-row gap-4 justify-center items-center">
-                                    <a
-                                        href={liveUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl shadow-lg shadow-green-500/20 hover:scale-105 transition-all text-base md:text-lg"
-                                    >
-                                        Visit Live Website <span className="material-icons">open_in_new</span>
-                                    </a>
-                                    <button
-                                        onClick={() => setShowSummary(!showSummary)}
-                                        className={`inline-flex items-center gap-3 font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl transition-all text-base md:text-lg border ${showSummary ? 'bg-white text-gray-900 border-white' : 'bg-transparent text-white border-white/20 hover:bg-white/5'}`}
-                                    >
-                                        <span className="material-icons">{showSummary ? 'visibility_off' : 'info'}</span>
-                                        {showSummary ? 'Hide Summary' : 'Summary'}
-                                    </button>
+                        <>
+                            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-8 text-center animate-fade-in mt-6">
+                                <div className="inline-block p-4 bg-green-500/20 rounded-full mb-4">
+                                    <span className="material-icons text-4xl text-green-400">check_circle</span>
                                 </div>
-                            ) : (
-                                <div className="text-gray-500">Live URL not available yet, Please contact support team.</div>
-                            )}
-                        </div>
+                                <h3 className="text-3xl font-bold text-white mb-2">Deployed Successfully!</h3>
+                                <p className="text-gray-400 mb-8 max-w-lg mx-auto">Your application is now live. It may take a few minutes for DNS to propagate globally.</p>
+
+                                {liveUrl ? (
+                                    <div className="flex flex-col md:flex-row gap-4 justify-center items-center">
+                                        <a
+                                            href={liveUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl shadow-lg shadow-green-500/20 hover:scale-105 transition-all text-base md:text-lg"
+                                        >
+                                            Visit Live Website <span className="material-icons">open_in_new</span>
+                                        </a>
+                                        <button
+                                            onClick={() => setShowSummary(!showSummary)}
+                                            className={`inline-flex items-center gap-3 font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl transition-all text-base md:text-lg border ${showSummary ? 'bg-white text-gray-900 border-white' : 'bg-transparent text-white border-white/20 hover:bg-white/5'}`}
+                                        >
+                                            <span className="material-icons">{showSummary ? 'visibility_off' : 'info'}</span>
+                                            {showSummary ? 'Hide Summary' : 'Summary'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="text-gray-500">Live URL not available yet, Please contact support team.</div>
+                                )}
+                            </div>
+
+                            {/* Go to Dashboard Button */}
+                            <div className="mt-6 text-center">
+                                <button
+                                    onClick={() => navigate('/dashboard')}
+                                    className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm font-medium"
+                                >
+                                    <span className="material-icons text-base">arrow_back</span>
+                                    Go to Dashboard
+                                </button>
+                            </div>
+                        </>
                     );
                 })()}
 
@@ -602,7 +623,7 @@ const DeployResourcesStep = ({
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 
