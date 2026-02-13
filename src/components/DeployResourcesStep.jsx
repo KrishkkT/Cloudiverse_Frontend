@@ -43,7 +43,7 @@ const DeployResourcesStep = ({
 
     // Deployment State
     const [deployJobId, setDeployJobId] = useState(null);
-    const [deployStatus, setDeployStatus] = useState('idle'); // idle, running, success, failed
+    const [deployStatus, setDeployStatus] = useState(workspace?.deployment_status === 'DEPLOYED' ? 'success' : 'idle'); // idle, running, success, failed
     const [deployStage, setDeployStage] = useState('init');
     const [logs, setLogs] = useState([]);
 
@@ -52,6 +52,9 @@ const DeployResourcesStep = ({
 
     const logEndRef = useRef(null);
     const pollInterval = useRef(null);
+
+    // Summary Toggle
+    const [showSummary, setShowSummary] = useState(false);
 
     // ─── VALIDATION LOGIC ─────────────────────────────────────────────────────────
     const isFormValid = () => {
@@ -68,8 +71,30 @@ const DeployResourcesStep = ({
 
     useEffect(() => {
         checkConnectionStatus();
+
+        // Hydrate logs if already deployed
+        if (workspace?.deployment_status === 'DEPLOYED') {
+            // 🔥 SYNC STATE: Ensure local state matches prop if loaded late
+            setDeployStatus('success');
+            hydrateLatestLogs();
+        }
+
         return () => stopPolling();
-    }, [workspace.id]);
+    }, [workspace.id, workspace?.deployment_status]);
+
+    const hydrateLatestLogs = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_BASE}/api/deploy/workspace/${workspace.id}/latest`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.data?.logs) {
+                setLogs(res.data.logs);
+            }
+        } catch (err) {
+            console.error("Failed to hydrate latest logs:", err);
+        }
+    };
 
     const checkConnectionStatus = async () => {
         try {
@@ -277,293 +302,304 @@ const DeployResourcesStep = ({
                 {/* ═══════════════════════════════════════════════════════════════════════════
                     DEPLOYED STATE - Show Summary Instead of Deploy Form
                     ═══════════════════════════════════════════════════════════════════════════ */}
-                {workspace?.deployment_status === 'DEPLOYED' ? (
-                    <>
+                {/* ═══════════════════════════════════════════════════════════════════════════
+                    PROJECT HEADER & CONSOLE (SHARED)
+                    ═══════════════════════════════════════════════════════════════════════════ */}
+                <div className="bg-surface border border-white/10 rounded-2xl p-6 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <span className="material-icons text-9xl">dns</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
+                        <div>
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Provider</div>
+                            <div className="text-white font-bold text-lg">{provider.toUpperCase()}</div>
+                        </div>
+                        <div>
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Region</div>
+                            <div className="text-white font-bold text-lg">{region}</div>
+                        </div>
+                        <div>
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Cluster / App</div>
+                            <div className="text-white font-bold text-lg truncate" title={infra_outputs?.computecontainer?.cluster_name || 'N/A'}>
+                                {infra_outputs?.computecontainer?.cluster_name || infra_outputs?.computecontainer?.service_name || 'Provisioned'}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Status</div>
+                            <div className={`font-bold flex items-center gap-2 ${workspace?.deployment_status === 'DEPLOYED' ? 'text-green-400' : 'text-blue-400'}`}>
+                                <span className={`w-2 h-2 rounded-full animate-pulse ${workspace?.deployment_status === 'DEPLOYED' ? 'bg-green-500' : 'bg-blue-500'}`}></span>
+                                {workspace?.deployment_status === 'DEPLOYED' ? 'Live & Running' : 'Ready to Deploy'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 🚀 DEPLOYED SUMMARY (Conditional Overlay/Section) */}
+                {workspace?.deployment_status === 'DEPLOYED' && showSummary && (
+                    <div className="animate-slide-down">
                         <DeployedSummary
                             workspace={workspace}
                             infraOutputs={infra_outputs}
                             onDeleteClick={() => setShowDestroyModal(true)}
                         />
+                    </div>
+                )}
 
-                        <DestroyConfirmationModal
-                            isOpen={showDestroyModal}
-                            onClose={() => setShowDestroyModal(false)}
-                            workspaceId={workspace.id}
-                            workspaceName={workspace.name || 'This Project'}
-                            onDestroyComplete={async () => {
-                                setShowDestroyModal(false);
-                                toast.success("Infrastructure destroyed successfully");
-                                // Refresh workspace to get updated status
-                                try {
-                                    const token = localStorage.getItem('token');
-                                    const res = await axios.get(`${API_BASE}/api/workspaces/${workspace.id}`, {
-                                        headers: { Authorization: `Bearer ${token}` }
-                                    });
-                                    if (res.data && onUpdateWorkspace) {
-                                        onUpdateWorkspace(res.data);
-                                    }
-                                } catch (err) {
-                                    console.error("Failed to refresh workspace:", err);
-                                }
-                            }}
-                        />
-                    </>
-                ) : (
-                    <>
-                        {/* 🔍 INFRA SUMMARY BLOCK */}
-                        <div className="bg-surface border border-white/10 rounded-2xl p-6 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-4 opacity-10">
-                                <span className="material-icons text-9xl">dns</span>
+                <DestroyConfirmationModal
+                    isOpen={showDestroyModal}
+                    onClose={() => setShowDestroyModal(false)}
+                    workspaceId={workspace.id}
+                    workspaceName={workspace.name || 'This Project'}
+                    onDestroyComplete={async () => {
+                        setShowDestroyModal(false);
+                        toast.success("Infrastructure destroyed successfully");
+                        // Refresh workspace to get updated status
+                        try {
+                            const token = localStorage.getItem('token');
+                            const res = await axios.get(`${API_BASE}/api/workspaces/${workspace.id}`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                            });
+                            if (res.data && onUpdateWorkspace) {
+                                onUpdateWorkspace(res.data);
+                            }
+                        } catch (err) {
+                            console.error("Failed to refresh workspace:", err);
+                        }
+                    }}
+                />
+
+                {/* 🚀 EXECUTION CONSOLE (Replaces Form when running or deployed) */}
+                {deployStatus !== 'idle' && (
+                    <div className="bg-[#0f1117] border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
+                        <div className="bg-[#1a1d26] p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="material-icons text-gray-400">terminal</span>
+                                <span className="font-mono font-bold text-gray-300">Deployment Logs</span>
+                                {deployStatus === 'running' && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></span>}
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
-                                <div>
-                                    <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Provider</div>
-                                    <div className="text-white font-bold text-lg">{provider.toUpperCase()}</div>
+                            {deployStatus === 'failed' && (
+                                <button onClick={() => setDeployStatus('idle')} className="text-red-400 text-xs hover:underline flex items-center gap-1">
+                                    <span className="material-icons text-sm">refresh</span> Try Again
+                                </button>
+                            )}
+                        </div>
+                        <div className="p-6 h-[400px] overflow-y-auto font-mono text-xs space-y-2 bg-black/40">
+                            {logs.length > 0 ? logs.map((log, idx) => (
+                                <div key={idx} className="text-gray-300 border-l-2 border-transparent pl-3 hover:bg-white/5 py-1">
+                                    <span className="text-gray-600 mr-3 inline-block w-[80px]">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                                    <span dangerouslySetInnerHTML={{ __html: log.message.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-400 underline">$1</a>') }}></span>
                                 </div>
-                                <div>
-                                    <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Region</div>
-                                    <div className="text-white font-bold text-lg">{region}</div>
-                                </div>
-                                <div>
-                                    <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Cluster / App</div>
-                                    <div className="text-white font-bold text-lg truncate" title={infra_outputs?.computecontainer?.cluster_name || 'N/A'}>
-                                        {infra_outputs?.computecontainer?.cluster_name || infra_outputs?.computecontainer?.service_name || 'Provisioned'}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Status</div>
-                                    <div className="text-green-400 font-bold flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                        Ready to Deploy
-                                    </div>
-                                </div>
+                            )) : (
+                                <div className="text-gray-500 italic py-4">Deployed versions do not have log stream...</div>
+                            )}
+                            <div ref={logEndRef} />
+                        </div>
+                    </div>
+                )}
+
+                {/* 🔴 FAILED STATE UI */}
+                {deployStatus === 'failed' && (() => {
+                    const lastLog = logs[logs.length - 1]?.message || '';
+                    const errorDetails = ((logMsg) => {
+                        if (logMsg.includes('INVALID_REPO_URL')) return {
+                            reason: 'Invalid GitHub repository URL or inaccessible repository.',
+                            fixes: ['Check if the repository is private and requires a token', 'Verify the URL starts with https://github.com/', 'Ensure the branch exists']
+                        };
+                        return {
+                            reason: lastLog.replace('❌ Deployment Failed:', '').trim() || 'An unexpected error occurred.',
+                            fixes: ['Check the deployment logs for more details', 'Retry the deployment']
+                        };
+                    })(logs.find(l => l.message.includes('❌'))?.message || lastLog);
+
+                    return (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center animate-fade-in mt-6">
+                            <h3 className="text-2xl font-bold text-red-500 mb-2">❌ Deployment Failed</h3>
+                            <p className="text-gray-400 mb-4">{errorDetails.reason}</p>
+                            <div className="flex gap-4 justify-center">
+                                <button onClick={() => setDeployStatus('idle')} className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2 rounded-lg transition-colors flex items-center gap-2">
+                                    <span className="material-icons">refresh</span> Retry
+                                </button>
                             </div>
                         </div>
+                    );
+                })()}
 
-                        {/* 📝 DEPLOYMENT FORM (INLINE) */}
-                        {deployStatus === 'idle' && (
-                            <div className="bg-[#1e212b] border border-white/10 rounded-2xl p-8 shadow-xl">
-                                {/* Source Tabs */}
-                                <div className="flex flex-col md:flex-row gap-4 mb-8">
-                                    <button
-                                        onClick={() => setSourceType('github')}
-                                        className={`flex-1 py-3 md:py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-base md:text-lg font-bold ${sourceType === 'github' ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
+                {/* 🟢 SUCCESS STATE UI */}
+                {deployStatus === 'success' && (() => {
+                    // Resolve live URL from infra outputs (SINGLE SOURCE OF TRUTH)
+                    const deploymentTarget = infra_outputs?.deployment_target;
+                    let liveUrl = null;
+
+                    if (deploymentTarget?.type === 'STATIC_STORAGE') {
+                        // Static sites: use CDN domain or bucket website endpoint
+                        const cdnDomain = deploymentTarget.static?.cdn_domain;
+                        const bucketName = deploymentTarget.static?.bucket_name;
+                        liveUrl = cdnDomain ? `https://${cdnDomain}` : (bucketName ? `http://${bucketName}.s3-website.${deploymentTarget.static?.bucket_region || 'us-east-1'}.amazonaws.com` : null);
+                    } else if (deploymentTarget?.type === 'CONTAINER_SERVICE') {
+                        // Container services: use service URL or load balancer
+                        liveUrl = deploymentTarget.container?.service_url || deploymentTarget.container?.load_balancer_url;
+                    } else if (deploymentTarget?.type === 'SERVERLESS_API') {
+                        // Serverless: use API endpoint
+                        liveUrl = deploymentTarget.api?.endpoint;
+                    }
+
+                    // Fallback: try parsing from logs (backward compat only)
+                    if (!liveUrl) {
+                        const urlLog = logs.find(l => l.message?.includes('https://') && !l.message?.includes('github.com'));
+                        if (urlLog) {
+                            const match = urlLog.message.match(/(https?:\/\/[^\s]+)/);
+                            if (match) liveUrl = match[1];
+                        }
+                    }
+
+                    return (
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-8 text-center animate-fade-in mt-6">
+                            <div className="inline-block p-4 bg-green-500/20 rounded-full mb-4">
+                                <span className="material-icons text-4xl text-green-400">check_circle</span>
+                            </div>
+                            <h3 className="text-3xl font-bold text-white mb-2">Deployed Successfully!</h3>
+                            <p className="text-gray-400 mb-8 max-w-lg mx-auto">Your application is now live. It may take a few minutes for DNS to propagate globally.</p>
+
+                            {liveUrl ? (
+                                <div className="flex flex-col md:flex-row gap-4 justify-center items-center">
+                                    <a
+                                        href={liveUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl shadow-lg shadow-green-500/20 hover:scale-105 transition-all text-base md:text-lg"
                                     >
-                                        <span className="material-icons">code</span> GitHub Repository
-                                    </button>
+                                        Visit Live Website <span className="material-icons">open_in_new</span>
+                                    </a>
                                     <button
-                                        onClick={() => setSourceType('docker')}
-                                        className={`flex-1 py-3 md:py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-base md:text-lg font-bold ${sourceType === 'docker' ? 'bg-purple-500/10 border-purple-500 text-purple-400 shadow-lg shadow-purple-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
+                                        onClick={() => setShowSummary(!showSummary)}
+                                        className={`inline-flex items-center gap-3 font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl transition-all text-base md:text-lg border ${showSummary ? 'bg-white text-gray-900 border-white' : 'bg-transparent text-white border-white/20 hover:bg-white/5'}`}
                                     >
-                                        <span className="material-icons">layers</span> Docker Image
+                                        <span className="material-icons">{showSummary ? 'visibility_off' : 'info'}</span>
+                                        {showSummary ? 'Hide Summary' : 'Summary'}
                                     </button>
                                 </div>
+                            ) : (
+                                <div className="text-gray-500">Live URL not available yet, Please contact support team.</div>
+                            )}
+                        </div>
+                    );
+                })()}
 
-                                {/* GitHub Inputs */}
-                                {sourceType === 'github' && (
-                                    <div className="space-y-6 animate-fade-in">
+                {/* 📝 DEPLOYMENT FORM (INLINE) - ONLY IF NOT DEPLOYED or failed */}
+                {(workspace?.deployment_status !== 'DEPLOYED' && deployStatus === 'idle') && (
+                    <div className="bg-[#1e212b] border border-white/10 rounded-2xl p-8 shadow-xl">
+                        {/* Source Tabs */}
+                        <div className="flex flex-col md:flex-row gap-4 mb-8">
+                            <button
+                                onClick={() => setSourceType('github')}
+                                className={`flex-1 py-3 md:py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-base md:text-lg font-bold ${sourceType === 'github' ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
+                            >
+                                <span className="material-icons">code</span> GitHub Repository
+                            </button>
+                            <button
+                                onClick={() => setSourceType('docker')}
+                                className={`flex-1 py-3 md:py-4 rounded-xl border transition-all flex items-center justify-center gap-3 text-base md:text-lg font-bold ${sourceType === 'docker' ? 'bg-purple-500/10 border-purple-500 text-purple-400 shadow-lg shadow-purple-500/10' : 'bg-transparent border-white/10 text-gray-400 hover:bg-white/5'}`}
+                            >
+                                <span className="material-icons">layers</span> Docker Image
+                            </button>
+                        </div>
+
+                        {/* GitHub Inputs */}
+                        {sourceType === 'github' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div>
+                                    <label className="text-xs text-gray-400 uppercase font-bold mb-3 block">GitHub Repository</label>
+                                    <GitHubRepoSelector
+                                        selectedRepo={selectedRepo}
+                                        onSelect={(repo) => {
+                                            setSelectedRepo(repo);
+                                            setRepoUrl(''); // Clear manual URL if any
+                                        }}
+                                    />
+                                </div>
+
+                                {selectedRepo && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-slide-down">
                                         <div>
-                                            <label className="text-xs text-gray-400 uppercase font-bold mb-3 block">GitHub Repository</label>
-                                            <GitHubRepoSelector
-                                                selectedRepo={selectedRepo}
-                                                onSelect={(repo) => {
-                                                    setSelectedRepo(repo);
-                                                    setRepoUrl(''); // Clear manual URL if any
-                                                }}
-                                            />
-                                        </div>
-
-                                        {selectedRepo && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-slide-down">
-                                                <div>
-                                                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Select Branch</label>
-                                                    <div className="relative">
-                                                        <select
-                                                            value={branch}
-                                                            onChange={(e) => {
-                                                                const b = e.target.value;
-                                                                setBranch(b);
-                                                                detectConfig(selectedRepo, b);
-                                                            }}
-                                                            className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-blue-500 outline-none transition-colors appearance-none cursor-pointer pr-10"
-                                                            disabled={isFetchingBranches || isDetecting}
-                                                        >
-                                                            {isFetchingBranches ? (
-                                                                <option>Loading branches...</option>
-                                                            ) : (
-                                                                branches.map(b => (
-                                                                    <option key={b.name} value={b.name} className="bg-gray-900">{b.name}</option>
-                                                                ))
-                                                            )}
-                                                        </select>
-                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 flex items-center gap-2">
-                                                            {(isFetchingBranches || isDetecting) && <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />}
-                                                            <span className="material-icons">expand_more</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center justify-between">
-                                                        Build Command
-                                                        {isDetecting && <span className="text-[10px] text-blue-400 animate-pulse font-normal lowercase">Detecting optimal settings...</span>}
-                                                    </label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            value={buildCommand}
-                                                            onChange={e => setBuildCommand(e.target.value)}
-                                                            placeholder="npm run build"
-                                                            className={`w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-blue-500 outline-none transition-colors ${isDetecting ? 'opacity-50' : ''}`}
-                                                        />
-                                                        {isDetecting && (
-                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                                                <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                            <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Select Branch</label>
+                                            <div className="relative">
+                                                <select
+                                                    value={branch}
+                                                    onChange={(e) => {
+                                                        const b = e.target.value;
+                                                        setBranch(b);
+                                                        detectConfig(selectedRepo, b);
+                                                    }}
+                                                    className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-blue-500 outline-none transition-colors appearance-none cursor-pointer pr-10"
+                                                    disabled={isFetchingBranches || isDetecting}
+                                                >
+                                                    {isFetchingBranches ? (
+                                                        <option>Loading branches...</option>
+                                                    ) : (
+                                                        branches.map(b => (
+                                                            <option key={b.name} value={b.name} className="bg-gray-900">{b.name}</option>
+                                                        ))
+                                                    )}
+                                                </select>
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 flex items-center gap-2">
+                                                    {(isFetchingBranches || isDetecting) && <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />}
+                                                    <span className="material-icons">expand_more</span>
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Docker Inputs */}
-                                {sourceType === 'docker' && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-                                        <div className="col-span-2">
-                                            <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Docker Image <span className="text-red-400">*</span></label>
-                                            <input type="text" value={dockerImage} onChange={e => setDockerImage(e.target.value)} placeholder="e.g. nginx:latest, myrepo/app:v1" className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-purple-500 outline-none transition-colors" />
                                         </div>
                                         <div>
-                                            <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Container Port</label>
-                                            <input type="text" value={containerPort} onChange={e => setContainerPort(e.target.value)} placeholder="80" className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-purple-500 outline-none transition-colors" />
+                                            <label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center justify-between">
+                                                Build Command
+                                                {isDetecting && <span className="text-[10px] text-blue-400 animate-pulse font-normal lowercase">Detecting optimal settings...</span>}
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={buildCommand}
+                                                    onChange={e => setBuildCommand(e.target.value)}
+                                                    placeholder="npm run build"
+                                                    className={`w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-blue-500 outline-none transition-colors ${isDetecting ? 'opacity-50' : ''}`}
+                                                />
+                                                {isDetecting && (
+                                                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        )}
 
-                                {/* Action Bar */}
-                                <div className="mt-8 pt-8 border-t border-white/10 flex justify-end">
-                                    <button
-                                        onClick={handleDeploySubmit}
-                                        disabled={!isFormValid()}
-                                        className={`px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg flex items-center gap-3 transition-all ${isFormValid()
-                                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20 hover:scale-[1.02]'
-                                            : 'bg-white/5 text-gray-500 cursor-not-allowed'}`}
-                                    >
-                                        <span className="material-icons">rocket_launch</span>
-                                        {isFormValid() ? 'Deploy Application' : 'Enter Details to Deploy'}
-                                    </button>
+                        {/* Docker Inputs */}
+                        {sourceType === 'docker' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+                                <div className="col-span-2">
+                                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Docker Image <span className="text-red-400">*</span></label>
+                                    <input type="text" value={dockerImage} onChange={e => setDockerImage(e.target.value)} placeholder="e.g. nginx:latest, myrepo/app:v1" className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-purple-500 outline-none transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Container Port</label>
+                                    <input type="text" value={containerPort} onChange={e => setContainerPort(e.target.value)} placeholder="80" className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:border-purple-500 outline-none transition-colors" />
                                 </div>
                             </div>
                         )}
 
-                        {/* 🚀 EXECUTION CONSOLE (Replaces Form when running) */}
-                        {deployStatus !== 'idle' && (
-                            <div className="bg-[#0f1117] border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
-                                <div className="bg-[#1a1d26] p-4 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="material-icons text-gray-400">terminal</span>
-                                        <span className="font-mono font-bold text-gray-300">Deployment Logs</span>
-                                        {deployStatus === 'running' && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></span>}
-                                    </div>
-                                    {deployStatus === 'failed' && (
-                                        <button onClick={() => setDeployStatus('idle')} className="text-red-400 text-xs hover:underline flex items-center gap-1">
-                                            <span className="material-icons text-sm">refresh</span> Try Again
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="p-6 h-[400px] overflow-y-auto font-mono text-xs space-y-2 bg-black/40">
-                                    {logs.map((log, idx) => (
-                                        <div key={idx} className="text-gray-300 border-l-2 border-transparent pl-3 hover:bg-white/5 py-1">
-                                            <span className="text-gray-600 mr-3 inline-block w-[80px]">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                                            <span dangerouslySetInnerHTML={{ __html: log.message.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-400 underline">$1</a>') }}></span>
-                                        </div>
-                                    ))}
-                                    <div ref={logEndRef} />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 🔴 FAILED STATE UI */}
-                        {deployStatus === 'failed' && (() => {
-                            const lastLog = logs[logs.length - 1]?.message || '';
-                            const errorDetails = ((logMsg) => {
-                                if (logMsg.includes('INVALID_REPO_URL')) return {
-                                    reason: 'Invalid GitHub repository URL or inaccessible repository.',
-                                    fixes: ['Check if the repository is private and requires a token', 'Verify the URL starts with https://github.com/', 'Ensure the branch exists']
-                                };
-                                return {
-                                    reason: lastLog.replace('❌ Deployment Failed:', '').trim() || 'An unexpected error occurred.',
-                                    fixes: ['Check the deployment logs for more details', 'Retry the deployment']
-                                };
-                            })(logs.find(l => l.message.includes('❌'))?.message || lastLog);
-
-                            return (
-                                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center animate-fade-in mt-6">
-                                    <h3 className="text-2xl font-bold text-red-500 mb-2">❌ Deployment Failed</h3>
-                                    <p className="text-gray-400 mb-4">{errorDetails.reason}</p>
-                                    <div className="flex gap-4 justify-center">
-                                        <button onClick={() => setDeployStatus('idle')} className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2 rounded-lg transition-colors flex items-center gap-2">
-                                            <span className="material-icons">refresh</span> Retry
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        {/* 🟢 SUCCESS STATE UI */}
-                        {deployStatus === 'success' && (() => {
-                            // Resolve live URL from infra outputs (SINGLE SOURCE OF TRUTH)
-                            const deploymentTarget = infra_outputs?.deployment_target;
-                            let liveUrl = null;
-
-                            if (deploymentTarget?.type === 'STATIC_STORAGE') {
-                                // Static sites: use CDN domain or bucket website endpoint
-                                const cdnDomain = deploymentTarget.static?.cdn_domain;
-                                const bucketName = deploymentTarget.static?.bucket_name;
-                                liveUrl = cdnDomain ? `https://${cdnDomain}` : (bucketName ? `http://${bucketName}.s3-website.${deploymentTarget.static?.bucket_region || 'us-east-1'}.amazonaws.com` : null);
-                            } else if (deploymentTarget?.type === 'CONTAINER_SERVICE') {
-                                // Container services: use service URL or load balancer
-                                liveUrl = deploymentTarget.container?.service_url || deploymentTarget.container?.load_balancer_url;
-                            } else if (deploymentTarget?.type === 'SERVERLESS_API') {
-                                // Serverless: use API endpoint
-                                liveUrl = deploymentTarget.api?.endpoint;
-                            }
-
-                            // Fallback: try parsing from logs (backward compat only)
-                            if (!liveUrl) {
-                                const urlLog = logs.find(l => l.message?.includes('https://') && !l.message?.includes('github.com'));
-                                if (urlLog) {
-                                    const match = urlLog.message.match(/(https?:\/\/[^\s]+)/);
-                                    if (match) liveUrl = match[1];
-                                }
-                            }
-
-                            return (
-                                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-8 text-center animate-fade-in mt-6">
-                                    <div className="inline-block p-4 bg-green-500/20 rounded-full mb-4">
-                                        <span className="material-icons text-4xl text-green-400">check_circle</span>
-                                    </div>
-                                    <h3 className="text-3xl font-bold text-white mb-2">Deployed Successfully!</h3>
-                                    <p className="text-gray-400 mb-8 max-w-lg mx-auto">Your application is now live. It may take a few minutes for DNS to propagate globally.</p>
-
-                                    {liveUrl ? (
-                                        <a
-                                            href={liveUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center gap-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold px-6 py-3 md:px-8 md:py-4 rounded-xl shadow-lg shadow-green-500/20 hover:scale-105 transition-all text-base md:text-lg"
-                                        >
-                                            Visit Live Website <span className="material-icons">open_in_new</span>
-                                        </a>
-                                    ) : (
-                                        <div className="text-gray-500">Live URL not available yet, Please contact support team.</div>
-                                    )}
-                                </div>
-                            );
-                        })()}
-
-                    </>
+                        {/* Action Bar */}
+                        <div className="mt-8 pt-8 border-t border-white/10 flex justify-end">
+                            <button
+                                onClick={handleDeploySubmit}
+                                disabled={!isFormValid()}
+                                className={`px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg flex items-center gap-3 transition-all ${isFormValid()
+                                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20 hover:scale-[1.02]'
+                                    : 'bg-white/5 text-gray-500 cursor-not-allowed'}`}
+                            >
+                                <span className="material-icons">rocket_launch</span>
+                                {isFormValid() ? 'Deploy Application' : 'Enter Details to Deploy'}
+                            </button>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
@@ -571,6 +607,5 @@ const DeployResourcesStep = ({
 };
 
 export default DeployResourcesStep;
-
 
 

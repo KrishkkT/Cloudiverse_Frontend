@@ -74,6 +74,7 @@ const DeployTerraformStep = ({
 
             // Check for saved user-level connection
             const savedRes = await axios.get(`${API_BASE}/cloud/connections/${providerKey}`, {
+                params: { workspace_id: workspaceId },
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -146,6 +147,13 @@ const DeployTerraformStep = ({
             if (conn && conn.status === 'connected') {
                 // If providers match or no selected provider yet, use saved connection
                 if (!selectedProvider || conn.provider?.toLowerCase() === selectedProvider?.toLowerCase()) {
+
+                    // RECONNECTION LOGIC: If we were not connected before, trigger Terraform generation
+                    if (connectionStatus !== 'connected') {
+                        console.log('[DeployTerraformStep] Connection established/restored, re-running Terraform generation...');
+                        ensureTerraformGenerated();
+                    }
+
                     setConnectionStatus('connected');
                     setConnectionData(conn);
                     if (setConnection) setConnection(conn); // 🔥 Sync to parent
@@ -182,6 +190,7 @@ const DeployTerraformStep = ({
         setIsVerifying(true);
         try {
             const token = localStorage.getItem('token');
+            // 🧠 FIX: Use the same dynamic role naming pattern as the backend
             const roleArn = `arn:aws:iam::${awsAccountId}:role/CloudiverseAccessRole-${awsSetup.externalId}`;
 
             const res = await axios.post(`${API_BASE}/cloud/aws/verify`, {
@@ -511,6 +520,9 @@ const DeployTerraformStep = ({
                                                     <label className="text-xs font-semibold text-text-secondary block mb-1.5">
                                                         Your AWS Account ID (Required for Verification)
                                                     </label>
+                                                    <p className="text-[10px] text-text-muted mb-2">
+                                                        * If you have already created the stack for a previous project, just enter your Account ID below to connect instantly.
+                                                    </p>
                                                     <div className="flex gap-2">
                                                         <input
                                                             type="text"

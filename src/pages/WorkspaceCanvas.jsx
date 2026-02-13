@@ -71,6 +71,7 @@ const WorkspaceCanvas = () => {
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
     const [userPlan, setUserPlan] = useState('free'); // 🔥 Track user plan
     const [provisioningState, setProvisioningState] = useState({}); // 🔥 Persistent Provisioning State
+    const [infraOutputs, setInfraOutputs] = useState(null); // 🔥 Captured Terraform Outputs
 
     // Detect Drift
     useEffect(() => {
@@ -324,8 +325,16 @@ const WorkspaceCanvas = () => {
                 const ws = res.data;
 
                 // 🔥 Check if workspace is deployed
-                const deploymentStatus = ws.state_json?.deployment?.status || ws.step;
-                if (deploymentStatus === 'active' || ws.step === 'active_deployment') {
+                // 🔥 Check if workspace is deployed
+                const deploymentStatus = ws.deployment_status || ws.state_json?.deployment?.status || ws.step;
+                const isStatusActive = (
+                    deploymentStatus === 'DEPLOYED' ||
+                    deploymentStatus === 'active' ||
+                    deploymentStatus === 'ACTIVE' ||
+                    ws.step === 'active_deployment'
+                );
+
+                if (isStatusActive) {
                     setIsDeployed(true);
                     console.log('[WORKSPACE] Deployed workspace - editing disabled');
                 }
@@ -390,9 +399,20 @@ const WorkspaceCanvas = () => {
                         setSelectedProvider(savedState.connection.provider);
                     } else if (savedState.costEstimation?.recommended?.provider) {
                         // Only fallback if NO explicit selection existed
-                        console.log("Hydrating Provider from Recommendation:", savedState.costEstimation.recommended.provider);
-                        setSelectedProvider(savedState.costEstimation.recommended.provider.toUpperCase());
+                        const rec = savedState.costEstimation.recommended.provider;
+                        console.log("Hydrating Provider from Recommendation:", rec);
+                        setSelectedProvider(rec);
                     }
+
+                    // 🔥 Hydrate Provisioning State & Outputs
+                    if (savedState.provisioning) {
+                        setProvisioningState(savedState.provisioning);
+                    }
+                    if (savedState.infra_outputs) {
+                        setInfraOutputs(savedState.infra_outputs);
+                        console.log("Hydrating Infra Outputs:", Object.keys(savedState.infra_outputs));
+                    }
+
 
                     // Restore project live status
                     if (savedState.is_live !== undefined) {
@@ -2741,9 +2761,11 @@ const WorkspaceCanvas = () => {
                                     workspace={{
                                         id: workspaceId,
                                         project_name: projectData?.name || infraSpec?.project_name,
+                                        deployment_status: isDeployed ? 'DEPLOYED' : 'PENDING',
                                         state_json: {
                                             infraSpec,
                                             costEstimation,
+                                            infra_outputs: infraOutputs,
                                             connection: infraSpec?.connection || costEstimation?.connection || {}
                                         }
                                     }}
