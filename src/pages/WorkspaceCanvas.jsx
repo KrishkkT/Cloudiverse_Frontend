@@ -2776,8 +2776,7 @@ const WorkspaceCanvas = () => {
                                         setIsDeployed(true);
                                         setIsProjectLive(true);
                                         handleSaveDraft(true);
-                                        // 🔥 FIX: Go to deployment summary after one-click deploy success
-                                        transitionToStep('deployment_summary');
+                                        // User remains on this step to see logs & success box
                                     }}
                                 />
                             )}
@@ -2806,7 +2805,7 @@ const WorkspaceCanvas = () => {
                                         infraSpec={infraSpec}
                                         selectedProvider={selectedProvider}
                                         costEstimation={costEstimation}
-                                        onComplete={() => transitionToStep('deployment_summary')}
+                                        onComplete={() => transitionToStep('deployment_summary')} // Keep this as it's a button action
                                         onBack={() => transitionToStep('feedback')}
                                         isDeployed={isDeployed}
                                         onDeploy={() => {

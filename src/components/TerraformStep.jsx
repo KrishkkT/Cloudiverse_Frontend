@@ -537,8 +537,7 @@ const TerraformStep = ({
                             toast.success('Project marked as Self-Deployed', { id: loadingId });
                             setIsSelfDeployed(true);
                             if (onDeploy) onDeploy();
-                            // 🔥 FIX: Go to summary page after self-deploy
-                            if (onComplete) onComplete();
+                            // User stays on this page to review instructions/files
                         } catch (err) {
                             console.error(err);
                             toast.error('Failed to mark deployment.');
