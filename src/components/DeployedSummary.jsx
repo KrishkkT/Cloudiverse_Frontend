@@ -13,6 +13,9 @@ const DeployedSummary = ({
     const deploymentTarget = infraOutputs?.deployment_target;
     const deploymentHistory = workspace?.deployment_history || [];
 
+    const { costEstimation, infraSpec } = workspace?.state_json || {};
+    const connection = workspace?.state_json?.connection || infraSpec?.connection || costEstimation?.connection || {};
+
     // Resolve live URL - PRIORITY: deployment history > deployment_target config
     const getLiveUrl = () => {
         // 1. First check deployment_history for actual live_url (set by backend after successful deploy)
@@ -38,18 +41,74 @@ const DeployedSummary = ({
         }
     };
 
+    // ─── SERVICE MAPPING ──────────────────────────────────────────────────────────
+    const SERVICE_MAPPING = {
+        'computecontainer': 'ECS Fargate (Container)',
+        'computevm': 'EC2 Virtual Machine',
+        'computeserverless': 'Lambda Functions',
+        'computebatch': 'AWS Batch',
+        'relationaldatabase': 'RDS Database',
+        'nosqldatabase': 'DynamoDB NoSQL',
+        'objectstorage': 'S3 Bucket',
+        'blockstorage': 'EBS Volume',
+        'filestorage': 'EFS File System',
+        'vpcnetworking': 'VPC Network',
+        'loadbalancer': 'Load Balancer (ALB)',
+        'cdn': 'CloudFront CDN',
+        'apigateway': 'API Gateway',
+        'dns': 'Route53 DNS',
+        'identityauth': 'Cognito Auth',
+        'secretsmanagement': 'Secrets Manager',
+        'keymanagement': 'KMS Keys',
+        'waf': 'WAF Firewall',
+        'shield': 'Shield Protection',
+        'networkfirewall': 'Network Firewall',
+        'messagequeue': 'SQS Queue',
+        'eventbus': 'EventBridge',
+        'workfloworchestration': 'Step Functions',
+        'logging': 'CloudWatch Logs',
+        'monitoring': 'CloudWatch Metrics',
+        'mlinference': 'SageMaker Inference',
+        'cache': 'ElastiCache (Redis)',
+        'vpngateway': 'VPN Gateway',
+        'natgateway': 'NAT Gateway'
+    };
+
+    const getServiceName = (key) => {
+        // Handle names like "objectstorage_0", "cdn_1" -> "Object Storage", "CDN"
+        const cleanKey = key.replace(/_\d+$/, '').toLowerCase();
+        return SERVICE_MAPPING[cleanKey] ||
+            key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) // Fallback: "my_service" -> "My Service"
+    };
+
     const liveUrl = getLiveUrl();
-    const provider = deploymentTarget?.provider?.toUpperCase() || 'UNKNOWN';
-    const region = deploymentTarget?.region || workspace?.state_json?.region || 'Unknown';
-    const deploymentType = deploymentTarget?.type || 'UNKNOWN';
+    const provider = (deploymentTarget?.provider || connection?.provider || costEstimation?.provider || 'AWS').toUpperCase();
+    const region = deploymentTarget?.region || workspace?.state_json?.region || costEstimation?.region || 'us-east-1';
+
+    // Determine deployment type friendly name
+    const getDeploymentTypeLabel = () => {
+        const type = deploymentTarget?.type || workspace?.state_json?.architecture_pattern || 'Custom';
+        if (type === 'STATIC_STORAGE') return 'Static Website';
+        if (type === 'CONTAINER_SERVICE') return 'Container App';
+        if (type === 'SERVERLESS_API') return 'Serverless API';
+        return type.replace(/_/g, ' ');
+    };
+
+    const deploymentType = getDeploymentTypeLabel();
 
     // Get deployed timestamp
-    const deployedAt = workspace?.deployed_at ? new Date(workspace.deployed_at) : null;
-    const lastDeployEvent = deploymentHistory.filter(h => h.action === 'DEPLOY_SUCCESS').pop();
+    const deployedAt = workspace?.deployed_at ? new Date(workspace.deployed_at) : (
+        workspace.updated_at ? new Date(workspace.updated_at) : null
+    );
 
-    // Get deployed services list from infraSpec
+    // Get deployed services list from infraSpec OR costEstimation
+    // Prioritize infraSpec.services which explicitly lists selected services
     const services = workspace?.state_json?.infraSpec?.services || [];
-    const serviceNames = services.map(s => s.name || s.id).filter(Boolean);
+
+    // Extract names. If services is array of strings, use as is. If objects, use .name or .id
+    const serviceKeys = services.map(s => (typeof s === 'string' ? s : (s.name || s.id))).filter(Boolean);
+    // Determine unique human readable names
+    const displayServices = [...new Set(serviceKeys.map(getServiceName))].sort();
 
     return (
         <div className="bg-surface border border-white/10 rounded-2xl p-8 space-y-6 animate-fade-in">
@@ -64,6 +123,7 @@ const DeployedSummary = ({
                         <p className="text-sm text-gray-400">Your infrastructure is live and running</p>
                     </div>
                 </div>
+                {/* ... (rest of header) ... */}
                 <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                     <span className="text-green-400 font-medium text-sm">Live</span>
@@ -109,7 +169,7 @@ const DeployedSummary = ({
                         <Server className="w-4 h-4" />
                         Type
                     </div>
-                    <div className="text-white font-bold text-sm">{deploymentType.replace('_', ' ')}</div>
+                    <div className="text-white font-bold text-sm truncate" title={deploymentType}>{deploymentType}</div>
                 </div>
                 <div className="bg-black/20 rounded-xl p-4">
                     <div className="flex items-center gap-2 text-gray-400 text-xs uppercase mb-2">
@@ -117,17 +177,17 @@ const DeployedSummary = ({
                         Deployed
                     </div>
                     <div className="text-white font-bold text-sm">
-                        {deployedAt ? deployedAt.toLocaleDateString() : 'Unknown'}
+                        {deployedAt ? deployedAt.toLocaleDateString() : 'Just now'}
                     </div>
                 </div>
             </div>
 
             {/* Deployed Services */}
-            {serviceNames.length > 0 && (
+            {displayServices.length > 0 && (
                 <div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider mb-3">Deployed Services</div>
                     <div className="flex flex-wrap gap-2">
-                        {serviceNames.map((name, idx) => (
+                        {displayServices.map((name, idx) => (
                             <span key={idx} className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-blue-400 text-sm">
                                 {name}
                             </span>

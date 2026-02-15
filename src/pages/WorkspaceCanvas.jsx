@@ -744,6 +744,8 @@ const WorkspaceCanvas = () => {
                     selected_provider: selectedProvider, // Legacy support
                     connection, // 🔥 Persist connection metadata
                     provisioning: overrides.provisioning || provisioningState, // 🔥 Persist Provisioning State
+                    is_live: isProjectLive, // 🔥 Persist Live status for dashboard toggle
+                    is_deployed: isDeployed, // 🔥 Persist Deployed status
                     step
                 }
             };
@@ -2191,10 +2193,6 @@ const WorkspaceCanvas = () => {
 
                                                             return (
                                                                 <details className="mt-3 group" onClick={(e) => e.stopPropagation()}>
-                                                                    <summary className="cursor-pointer text-[11px] text-gray-400 hover:text-primary transition-colors flex items-center gap-1">
-                                                                        <span className="material-icons text-[14px] group-open:rotate-90 transition-transform">chevron_right</span>
-                                                                        View {services.length} included services
-                                                                    </summary>
                                                                     <div className="mt-2 space-y-1 max-h-48 overflow-y-auto pr-1 text-[10px]">
                                                                         {services.map((svc, idx) => {
                                                                             const serviceName = svc.name || svc.service || svc.service_id || 'Service';
@@ -2586,38 +2584,95 @@ const WorkspaceCanvas = () => {
 
                                                         <div className="animate-fade-in mt-3 space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                                                             {(() => {
-                                                                const recommendedServices = costEstimation.recommended?.provider === selectedProvider
-                                                                    ? costEstimation.recommended.services
-                                                                    : null;
-                                                                const services = recommendedServices || costEstimation.provider_details?.[selectedProvider || 'aws']?.services || [];
+                                                                // 1. Try recommended services if matches selection
+                                                                if (costEstimation.recommended?.provider === selectedProvider && costEstimation.recommended.services?.length) {
+                                                                    return renderServicesList(costEstimation.recommended.services);
+                                                                }
 
-                                                                return services.map((s, idx) => (
-                                                                    <div key={idx} className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                                                <span className="material-icons text-primary text-sm">
-                                                                                    {s.icon || 'cloud'}
-                                                                                </span>
-                                                                            </div>
-                                                                            <div>
-                                                                                <div className="text-sm font-medium text-white">
-                                                                                    {s.display_name || s.cloud_service || s.service_id}
+                                                                // 2. Try provider details (Infracost structure)
+                                                                const details = costEstimation.provider_details?.[selectedProvider] ||
+                                                                    costEstimation.provider_details?.[selectedProvider.toUpperCase()] ||
+                                                                    costEstimation.provider_details?.[selectedProvider.toLowerCase()];
+
+                                                                if (details?.services?.length > 0) {
+                                                                    return renderServicesList(details.services);
+                                                                }
+
+                                                                // 3. Try scenarios (Hybrid structure)
+                                                                const scenario = costEstimation.scenarios?.[costProfile] || costEstimation.scenarios?.cost_effective;
+                                                                const providerData = scenario?.[selectedProvider] ||
+                                                                    scenario?.[selectedProvider.toLowerCase()] ||
+                                                                    scenario?.[selectedProvider.toUpperCase()];
+
+                                                                if (providerData?.breakdown) {
+                                                                    // Convert breakdown object to services array
+                                                                    const breakdownServices = Object.entries(providerData.breakdown).map(([key, cost]) => ({
+                                                                        service_id: key,
+                                                                        display_name: key.replace(/_/g, ' ').toUpperCase(),
+                                                                        category: 'Infrastructure',
+                                                                        formatted_cost: `$${(cost || 0).toFixed(2)}`,
+                                                                        monthly_cost: cost,
+                                                                        icon: getServiceIcon(key)
+                                                                    }));
+                                                                    return renderServicesList(breakdownServices);
+                                                                }
+
+                                                                return <div className="text-sm text-gray-500 italic p-4 text-center">No service breakdown available for {selectedProvider}</div>;
+
+                                                                function getServiceIcon(key) {
+                                                                    if (key.includes('compute')) return 'memory';
+                                                                    if (key.includes('database') || key.includes('db')) return 'storage';
+                                                                    if (key.includes('storage')) return 'folder';
+                                                                    if (key.includes('network') || key.includes('balancer')) return 'router';
+                                                                    return 'cloud';
+                                                                }
+
+                                                                function renderServicesList(list) {
+                                                                    return list.map((s, idx) => (
+                                                                        <details key={idx} className="group/svc bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors overflow-hidden">
+                                                                            <summary className="flex items-center justify-between p-3 cursor-pointer list-none">
+                                                                                <div className="flex items-center space-x-3">
+                                                                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                                                        <span className="material-icons text-primary text-sm">
+                                                                                            {s.icon || getServiceIcon(s.service_id || s.service_class || '')}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <div className="text-sm font-medium text-white">
+                                                                                            {s.display_name || s.cloud_service || s.service_id}
+                                                                                        </div>
+                                                                                        <div className="text-xs text-gray-500">
+                                                                                            {s.cloud_service || s.category || 'Infrastructure'}
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div className="text-xs text-gray-500">
-                                                                                    {s.cloud_service || s.category || 'Infrastructure'}
+                                                                                <div className="flex items-center gap-4">
+                                                                                    <div className="text-right">
+                                                                                        <div className="text-sm font-bold text-white">
+                                                                                            {typeof s.formatted_cost === 'string' ? s.formatted_cost :
+                                                                                                `$${(typeof s.monthly_cost === 'number' ? s.monthly_cost :
+                                                                                                    (typeof s.cost?.monthly === 'number' ? s.cost.monthly :
+                                                                                                        (typeof s.cost === 'number' ? s.cost : 0))).toFixed(2)}`}
+                                                                                        </div>
+                                                                                        <div className="text-xs text-gray-500">
+                                                                                            /month
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <span className="material-icons text-gray-500 text-sm group-open/svc:rotate-180 transition-transform">expand_more</span>
+                                                                                </div>
+                                                                            </summary>
+                                                                            <div className="px-3 pb-3 pt-0">
+                                                                                <div className="pt-2 border-t border-white/5 text-xs text-gray-400 italic flex items-start gap-2">
+                                                                                    <span className="material-icons text-[14px] mt-0.5 text-blue-400">info</span>
+                                                                                    <span>
+                                                                                        {s.reason || s.pricing_note || s.reasoning ||
+                                                                                            (s.monthly_cost > 0 ? 'Estimated infrastructure cost based on usage.' : 'Included in free tier or usage-based pricing.')}
+                                                                                    </span>
                                                                                 </div>
                                                                             </div>
-                                                                        </div>
-                                                                        <div className="text-right">
-                                                                            <div className="text-sm font-bold text-white">
-                                                                                ${typeof s.monthly_cost === 'number' ? s.monthly_cost.toFixed(2) : (s.cost || '0.00')}
-                                                                            </div>
-                                                                            <div className="text-xs text-gray-500">
-                                                                                /month
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                ));
+                                                                        </details>
+                                                                    ));
+                                                                }
                                                             })()}
                                                         </div>
                                                     </details>
@@ -2630,7 +2685,7 @@ const WorkspaceCanvas = () => {
                                                             <summary className="text-xs text-amber-400 font-bold uppercase tracking-wider mb-2 cursor-pointer flex items-center justify-between list-none">
                                                                 <div className="flex items-center">
                                                                     <span className="material-icons text-xs mr-1 group-open:rotate-180 transition-transform">expand_more</span>
-                                                                    <span>Why {(costEstimation.recommendation_facts.provider || 'This Provider').toUpperCase()}?</span>
+                                                                    <span>Why {selectedProvider}?</span>
                                                                 </div>
                                                                 <span className="text-[10px] text-gray-500 font-normal normal-case group-open:hidden">Click to see rationale & cost</span>
                                                             </summary>
@@ -2772,10 +2827,22 @@ const WorkspaceCanvas = () => {
                                     selectedProvider={selectedProvider}
                                     onBack={() => transitionToStep('terraform_provision')}
                                     onUpdateWorkspace={() => handleSaveDraft(true)}
-                                    onDeploySuccess={() => {
+                                    onDeploySuccess={async () => {
                                         setIsDeployed(true);
                                         setIsProjectLive(true);
-                                        handleSaveDraft(true);
+                                        // Persist is_live + is_deployed via the dedicated deploy endpoint
+                                        // (handleSaveDraft skips when isDeployed is true, so we call the deploy API directly)
+                                        try {
+                                            const token = localStorage.getItem('token');
+                                            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+                                            await axios.put(`${API_BASE}/api/workspaces/${id}/deploy`, {
+                                                deployment_method: 'automated',
+                                                provider: selectedProvider
+                                            }, { headers });
+                                            console.log('[DEPLOY] Workspace marked as LIVE after successful deployment');
+                                        } catch (err) {
+                                            console.error('[DEPLOY] Failed to persist live status:', err);
+                                        }
                                         // User remains on this step to see logs & success box
                                     }}
                                 />
@@ -3054,6 +3121,7 @@ const WorkspaceCanvas = () => {
 
                                                         toast.success('🚀 Project marked as Self-Deployed!', { duration: 4000 });
                                                         setIsDeployed(true);
+                                                        setIsProjectLive(true);
                                                         // Stay on summary page - user can click dashboard button
                                                     } catch (error) {
                                                         handleApiError(error, 'Failed to confirm deployment.');

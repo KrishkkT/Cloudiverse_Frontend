@@ -97,7 +97,7 @@ function App() {
                     <Route path="/security" element={<Security />} />
                     <Route path="/service-policy" element={<ServicePolicy />} />
                     <Route path="/cancellation-refunds" element={<CancellationRefunds />} />
-                    <Route path="/docs" element={<Docs />} />
+                    <Route path="/docs/:section?" element={<Docs />} />
                     <Route path="/feedback" element={<AuthGuard><Feedback /></AuthGuard>} />
                     <Route path="/cloud-comparison" element={<CloudComparison />} />
 

@@ -252,20 +252,44 @@ const DeployResourcesStep = ({
                     clearInterval(pollInterval.current);
                     toast.success("Application Deployed Successfully!");
 
-                    // Refresh workspace to get latest infra_outputs (for live URL)
+                    // 🔥 CRITICAL: Persist Deployment State to Backend
                     try {
-                        const wsRes = await axios.get(`${API_BASE}/api/workspaces/${workspace.id}`, {
+                        const token = localStorage.getItem('token');
+
+                        // 1. Get current state to ensure we don't overwrite
+                        const currentWsRes = await axios.get(`${API_BASE}/api/workspaces/${workspace.id}`, {
                             headers: { Authorization: `Bearer ${token}` }
                         });
-                        if (wsRes.data && onUpdateWorkspace) {
-                            onUpdateWorkspace(wsRes.data);
+
+                        const updatedState = {
+                            ...currentWsRes.data.state_json,
+                            is_deployed: true,
+                            is_live: true,
+                            deployed_at: new Date().toISOString()
+                        };
+
+                        // 2. Save updated state and step
+                        const saveRes = await axios.post(`${API_BASE}/api/workspaces/save`, {
+                            workspaceId: workspace.id,
+                            step: 'deployed', // Advance step to deployed
+                            state: updatedState,
+                            name: workspace.name,
+                            projectId: workspace.project_id
+                        }, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+
+                        // 3. Update local parent state
+                        if (saveRes.data && onUpdateWorkspace) {
+                            onUpdateWorkspace(saveRes.data);
                         }
-                        // 🔥 NEW: Mark project as deployed
+
                         if (onDeploySuccess) {
                             onDeploySuccess();
                         }
-                    } catch (refreshErr) {
-                        console.error("Failed to refresh workspace after deploy:", refreshErr);
+                    } catch (err) {
+                        console.error("Failed to persist deployment state:", err);
+                        toast.error("Deployment succeeded but failed to update project status.");
                     }
                 } else if (job.status === 'failed') {
                     setDeployStatus('failed');
@@ -361,17 +385,41 @@ const DeployResourcesStep = ({
                     onDestroyComplete={async () => {
                         setShowDestroyModal(false);
                         toast.success("Infrastructure destroyed successfully");
-                        // Refresh workspace to get updated status
+
+                        // 🔥 CRITICAL: Reset Deployment State in Backend
                         try {
                             const token = localStorage.getItem('token');
-                            const res = await axios.get(`${API_BASE}/api/workspaces/${workspace.id}`, {
+
+                            // 1. Get current state
+                            const currentWsRes = await axios.get(`${API_BASE}/api/workspaces/${workspace.id}`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
-                            if (res.data && onUpdateWorkspace) {
-                                onUpdateWorkspace(res.data);
+
+                            const updatedState = {
+                                ...currentWsRes.data.state_json,
+                                is_deployed: false,
+                                is_live: false,
+                                deployed_at: null
+                            };
+
+                            // 2. Save reset state and revert step to 'design' (or 'cost-estimation')
+                            const saveRes = await axios.post(`${API_BASE}/api/workspaces/save`, {
+                                workspaceId: workspace.id,
+                                step: 'design', // Revert to design step
+                                state: updatedState,
+                                name: workspace.name,
+                                projectId: workspace.project_id
+                            }, {
+                                headers: { Authorization: `Bearer ${token}` }
+                            });
+
+                            // 3. Update local parent state
+                            if (saveRes.data && onUpdateWorkspace) {
+                                onUpdateWorkspace(saveRes.data);
                             }
                         } catch (err) {
-                            console.error("Failed to refresh workspace:", err);
+                            console.error("Failed to reset project status:", err);
+                            toast.error("Destroyed resources but failed to update project status.");
                         }
                     }}
                 />
