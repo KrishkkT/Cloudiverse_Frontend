@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Trash2, Save, ArrowLeft, Settings as SettingsIcon, Sparkles, Edit3 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import CICDConfiguration from '../components/workspaces/CICDConfiguration';
 
 const WorkspaceSettings = () => {
   const { id } = useParams();
@@ -211,9 +212,27 @@ const WorkspaceSettings = () => {
               </div>
             </div>
           </form>
+          <form onSubmit={handleSaveSettings}>
+            <div className="space-y-6">
+              {/* Other inputs... */}
+              {/* ... */}
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4">
+              {/* ... */}
+            </div>
+          </form>
         </div>
 
-        {/* Danger Zone */}
+        {/* CI/CD Configuration Section */}
+        {workspaceData && (
+          <div className="mb-6">
+            <CICDConfiguration
+              workspaceId={id}
+              initialConfig={workspaceData.ci_config || {}}
+            />
+          </div>
+        )}
         <div className="bg-surface border border-border rounded-xl p-6 mt-6">
           <div className="flex items-center mb-6">
             <Trash2 className="h-6 w-6 text-red-500 mr-2" />
